@@ -8,23 +8,64 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ============================================================
-# КОНФИГУРАЦИЯ (из секретов GitHub)
+# КОНФИГУРАЦИЯ
 # ============================================================
 BITRIX_WEBHOOK = os.environ.get('BITRIX_WEBHOOK')
 ENTITY_TYPE_ID = 1038
 ADDRESS_FIELD = 'ufCrm8FullAdress'
 YANDEX_API_KEY = os.environ.get('YANDEX_API_KEY', '')
 
-# Настройки скорости
-MAX_WORKERS = 10
+MAX_WORKERS = 3  # Ещё уменьшаем для избежания 429
 BATCH_SIZE = 50
 CACHE_FILE = 'data/geocode_cache.json'
+LOG_FILE = 'data/geocode_log.txt'
 
-# Стадии, которые ИГНОРИРУЕМ (не геокодируем и не выводим)
 IGNORE_STAGES = ['UC_QA1YNG']
 
 if not BITRIX_WEBHOOK:
     raise Exception("❌ BITRIX_WEBHOOK не задан в переменных окружения!")
+
+# ============================================================
+# ИНИЦИАЛИЗАЦИЯ ДИРЕКТОРИЙ
+# ============================================================
+def init_directories():
+    """Создает необходимые директории"""
+    os.makedirs('data', exist_ok=True)
+
+# ============================================================
+# ЛОГГИРОВАНИЕ (с гарантией записи)
+# ============================================================
+def log_message(msg, level='INFO'):
+    """Запись сообщения в лог-файл с принудительным сбросом буфера"""
+    try:
+        # Создаем директорию для лога
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_entry = f"[{timestamp}] [{level}] {msg}\n"
+        
+        # Выводим в консоль
+        print(log_entry.strip())
+        
+        # Записываем в файл с принудительным сбросом
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(log_entry)
+            f.flush()  # Принудительно записываем на диск
+            os.fsync(f.fileno())  # Гарантируем запись на диск
+            
+    except Exception as e:
+        print(f"⚠️ Ошибка записи лога: {e}")
+
+def clear_log():
+    """Очищает лог-файл при запуске"""
+    try:
+        os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+        with open(LOG_FILE, 'w', encoding='utf-8') as f:
+            f.write(f"Лог геокодирования {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("="*60 + "\n")
+            f.flush()
+    except Exception as e:
+        print(f"⚠️ Ошибка очистки лога: {e}")
 
 # ============================================================
 # КЭШ
@@ -37,12 +78,16 @@ def load_cache():
         return {}
 
 def save_cache(cache):
-    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    try:
+        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(cache, f, ensure_ascii=False, indent=2)
+            f.flush()
+    except Exception as e:
+        log_message(f"Ошибка сохранения кэша: {e}", 'ERROR')
 
 # ============================================================
-# ФУНКЦИЯ ДЛЯ ИЗВЛЕЧЕНИЯ СТАДИИ ИЗ ПОЛНОГО ID
+# ФУНКЦИЯ ДЛЯ ИЗВЛЕЧЕНИЯ СТАДИИ
 # ============================================================
 def get_stage_short(stage_id):
     if not stage_id:
@@ -50,23 +95,20 @@ def get_stage_short(stage_id):
     parts = stage_id.split(':')
     return parts[-1] if parts else 'default'
 
-# ============================================================
-# ПРОВЕРКА — НУЖНО ЛИ ИГНОРИРОВАТЬ
-# ============================================================
 def should_ignore(stage_id):
-    """Проверяет, нужно ли игнорировать объект по стадии"""
     if not stage_id:
         return False
     stage = get_stage_short(stage_id)
     return stage in IGNORE_STAGES
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА (исправленная версия)
+# НОРМАЛИЗАЦИЯ АДРЕСА (ИСПРАВЛЕННАЯ)
 # ============================================================
 def normalize_address(address):
     if not address:
         return ''
     
+    original = address
     text = str(address).strip()
     
     # Удаляем звездочки и решетки
@@ -75,48 +117,49 @@ def normalize_address(address):
     # Заменяем переносы строк на пробелы
     text = text.replace('\n', ' ').replace('\r', ' ')
     
-    # Удаляем лишние комментарии в скобках, но сохраняем важную информацию
-    # Например: (МЦК Стрешнево) - это важно для геокодирования
-    text = re.sub(r'\([^)]*МЦ[^)]*\)', '', text)  # Удаляем только если есть МЦК/МЦД
+    # Удаляем явные комментарии в скобках (но сохраняем важные ориентиры)
+    text = re.sub(r'\([^)]*МЦ[^)]*\)', '', text)
     text = re.sub(r'\([^)]*метро[^)]*\)', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\([^)]*ЖК[^)]*\)', '', text, flags=re.IGNORECASE)
     
-    # Удаляем только явные лишние части
+    # Удаляем лишние части (коды, парковки и т.д.)
     text = re.sub(r',?\s*код домофона[\s\S]*?(?=,|$)', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*домофон[\s\S]*?(?=,|$)', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*ключ[\s\S]*?(?=,|$)', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*парковка[\s\S]*?(?=,|$)', '', text, flags=re.IGNORECASE)
     
-    # Преобразуем сокращения (сохраняя структуру адреса)
-    replacements = {
-        r'\bул\.\b': 'улица',
-        r'\bпр-д\b': 'проезд',
-        r'\bпр-кт\b': 'проспект',
-        r'\bпр-т\b': 'проспект',
-        r'\bпр\.\b': 'проспект',  # Важно: проспект, а не проезд!
-        r'\bпер\.\b': 'переулок',
-        r'\bш\.\b': 'шоссе',
-        r'\bнаб\.\b': 'набережная',
-        r'\bб-р\b': 'бульвар',
-        r'\bбул\.\b': 'бульвар',
-        r'\bпос\.\b': 'поселок',
-        r'\bд\.\b': 'дом',
-        r'\bк\.\b': 'корпус',
-        r'\bстр\.\b': 'строение',
-        r'\bкорп\.\b': 'корпус',
-        r'\bг\.\b': 'город',
-    }
+    # Преобразуем сокращения (ВАЖНО: в правильном порядке)
+    replacements = [
+        (r'\bг\.\s*Москва\b', 'Москва'),
+        (r'\bг\.\s*Санкт-Петербург\b', 'Санкт-Петербург'),
+        (r'\bг\.\b', 'город'),
+        (r'\bул\.\b', 'улица'),
+        (r'\bпр-д\b', 'проезд'),
+        (r'\bпр-кт\b', 'проспект'),
+        (r'\bпр-т\b', 'проспект'),
+        (r'\bпр\.\b', 'проспект'),
+        (r'\bпер\.\b', 'переулок'),
+        (r'\bш\.\b', 'шоссе'),
+        (r'\bнаб\.\b', 'набережная'),
+        (r'\bб-р\b', 'бульвар'),
+        (r'\bбул\.\b', 'бульвар'),
+        (r'\bпос\.\b', 'поселок'),
+        (r'\bд\.\b', 'дом'),
+        (r'\bк\.\b', 'корпус'),
+        (r'\bстр\.\b', 'строение'),
+        (r'\bкорп\.\b', 'корпус'),
+    ]
     
-    for pattern, replacement in replacements.items():
+    for pattern, replacement in replacements:
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
-    # Обработка форматов типа "д. 23к7" или "23к7"
+    # Обработка форматов типа "23к7" -> "23 корпус 7"
     text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
     text = re.sub(r'дом\s*(\d+)\s*к(\d+)', r'дом \1 корпус \2', text, flags=re.IGNORECASE)
     
-    # Удаляем только ОЧЕВИДНО лишние детали (квартиры, этажи, подъезды)
-    # НО сохраняем номер дома, корпус, строение
+    # Удаляем только ДЕТАЛИ КВАРТИР, но СОХРАНЯЕМ номер дома и корпус
     patterns_to_remove = [
-        (r',?\s*кв\.\s*[\d/А-Яа-яёЁ]+', ''),  # квартира
+        (r',?\s*кв\.\s*[\d/А-Яа-яёЁ]+', ''),
         (r',?\s*квартира\s*[\d/А-Яа-яёЁ]+', ''),
         (r',?\s*апарт\.?\s*[\d/А-Яа-яёЁ]+', ''),
         (r',?\s*апартаменты\s*[\d/А-Яа-яёЁ]+', ''),
@@ -135,6 +178,8 @@ def normalize_address(address):
         (r',?\s*парадная\s*\d+', ''),
         (r',?\s*на первом уровне секции', ''),
         (r',?\s*на втором уровне секции', ''),
+        (r',?\s*дверь\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*вход\s*[сС]о стороны[\s\S]*?(?=,|$)', ''),
     ]
     
     for pattern, replacement in patterns_to_remove:
@@ -145,9 +190,12 @@ def normalize_address(address):
     text = re.sub(r'\s+', ' ', text)
     text = text.strip().rstrip(',').rstrip('.')
     
-    # Если адрес слишком короткий, пытаемся восстановить его
+    # Убираем лишние запятые в конце
+    text = re.sub(r',\s*$', '', text)
+    
+    # Если адрес стал слишком коротким, используем оригинал
     if len(text) < 5:
-        return text
+        return original.replace('*', '').strip()
     
     return text
 
@@ -161,31 +209,34 @@ def geocode_address(address, cache):
     cache_key = hashlib.md5(address.encode()).hexdigest()
     
     if cache_key in cache and cache[cache_key]:
+        log_message(f"Найдено в кэше: {address[:50]}...", 'DEBUG')
         return cache[cache_key]
     
     coords = None
     
+    # Пробуем Яндекс (если ключ есть)
     if YANDEX_API_KEY:
+        log_message(f"Пробуем Яндекс: {address[:50]}...", 'INFO')
         coords = geocode_yandex(address)
         if coords:
+            log_message(f"✅ Яндекс нашел: {coords}", 'SUCCESS')
             cache[cache_key] = coords
             save_cache(cache)
             return coords
+        else:
+            log_message(f"❌ Яндекс не нашел: {address[:50]}...", 'WARNING')
     
+    # Пробуем OSM с задержкой между запросами
+    time.sleep(1)  # Увеличиваем задержку
+    log_message(f"Пробуем OSM: {address[:50]}...", 'INFO')
     coords = geocode_osm(address)
     if coords:
+        log_message(f"✅ OSM нашел: {coords}", 'SUCCESS')
         cache[cache_key] = coords
         save_cache(cache)
         return coords
-    
-    # Если не нашли по полному адресу, пробуем упрощенный вариант
-    simplified = simplify_address(address)
-    if simplified and simplified != address:
-        coords = geocode_yandex(simplified) if YANDEX_API_KEY else geocode_osm(simplified)
-        if coords:
-            cache[cache_key] = coords
-            save_cache(cache)
-            return coords
+    else:
+        log_message(f"❌ OSM не нашел: {address[:50]}...", 'WARNING')
     
     cache[cache_key] = None
     save_cache(cache)
@@ -193,9 +244,9 @@ def geocode_address(address, cache):
 
 def simplify_address(address):
     """Упрощает адрес для поиска (убирает корпуса если не найдено)"""
-    # Убираем корпус если есть
     simplified = re.sub(r',?\s*корпус\s*\d+', '', address, flags=re.IGNORECASE)
     simplified = re.sub(r',?\s*строение\s*\d+', '', simplified, flags=re.IGNORECASE)
+    simplified = re.sub(r',?\s*дом\s*(\d+)[А-Яа-я]?', r'дом \1', simplified, flags=re.IGNORECASE)
     return simplified.strip()
 
 def geocode_yandex(address):
@@ -221,9 +272,11 @@ def geocode_yandex(address):
                 lon, lat = pos.split(' ')
                 lat, lon = float(lat), float(lon)
                 return {'lat': lat, 'lon': lon}
+        else:
+            log_message(f"Яндекс статус: {response.status_code}", 'ERROR')
         return None
     except Exception as e:
-        print(f"   Yandex error: {e}")
+        log_message(f"Яндекс ошибка: {e}", 'ERROR')
         return None
 
 def geocode_osm(address):
@@ -246,22 +299,29 @@ def geocode_osm(address):
             data = response.json()[0]
             lat, lon = float(data['lat']), float(data['lon'])
             return {'lat': lat, 'lon': lon}
+        else:
+            if response.status_code != 200:
+                log_message(f"OSM статус: {response.status_code}", 'WARNING')
         return None
     except Exception as e:
-        print(f"   OSM error: {e}")
+        log_message(f"OSM ошибка: {e}", 'ERROR')
         return None
 
 # ============================================================
-# ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА (с игнорированием)
+# ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА
 # ============================================================
 def process_item(item, cache):
     stage_id = item.get('stageId', '')
+    item_id = item.get('id')
+    title = item.get('title', '')
     
-    # Проверяем — нужно ли игнорировать
+    log_message(f"--- Обработка ID: {item_id}, Title: {title} ---", 'INFO')
+    
     if should_ignore(stage_id):
+        log_message(f"Игнорируем по стадии: {stage_id}", 'INFO')
         return {
-            'id': item.get('id'),
-            'title': item.get('title', ''),
+            'id': item_id,
+            'title': title,
             'address': item.get(ADDRESS_FIELD, ''),
             'address_clean': '',
             'lat': None,
@@ -272,17 +332,47 @@ def process_item(item, cache):
         }, False
     
     address = item.get(ADDRESS_FIELD, '')
-    clean = normalize_address(address) if address else ''
+    if not address:
+        log_message(f"Адрес пуст", 'WARNING')
+        return {
+            'id': item_id,
+            'title': title,
+            'address': '',
+            'address_clean': '',
+            'lat': None,
+            'lon': None,
+            'stage_id': stage_id,
+            'stage_name': item.get('stage_name', ''),
+            'ignored': False
+        }, False
     
-    # Если адрес очищен слишком сильно, пробуем использовать оригинал
-    if clean and len(clean) < 10:
-        clean = address
+    clean = normalize_address(address)
+    log_message(f"Очищенный адрес: {clean}", 'INFO')
     
-    coords = geocode_address(clean, cache) if clean else None
+    if not clean:
+        log_message(f"После нормализации пусто", 'ERROR')
+        return {
+            'id': item_id,
+            'title': title,
+            'address': address,
+            'address_clean': '',
+            'lat': None,
+            'lon': None,
+            'stage_id': stage_id,
+            'stage_name': item.get('stage_name', ''),
+            'ignored': False
+        }, False
+    
+    coords = geocode_address(clean, cache)
+    
+    if coords:
+        log_message(f"✅ НАЙДЕНЫ координаты: {coords}", 'SUCCESS')
+    else:
+        log_message(f"❌ Координаты НЕ НАЙДЕНЫ", 'ERROR')
     
     return {
-        'id': item.get('id'),
-        'title': item.get('title', ''),
+        'id': item_id,
+        'title': title,
         'address': address,
         'address_clean': clean,
         'lat': coords['lat'] if coords else None,
@@ -299,8 +389,7 @@ def process_parallel(items, cache):
     total = len(items)
     start_time = time.time()
     
-    print(f"   Запуск {MAX_WORKERS} параллельных потоков...")
-    print(f"   Игнорируем стадию: {IGNORE_STAGES}")
+    log_message(f"Запуск {MAX_WORKERS} потоков, всего {total} объектов", 'INFO')
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {
@@ -321,10 +410,12 @@ def process_parallel(items, cache):
                 completed += 1
                 if completed % BATCH_SIZE == 0 or completed == total:
                     elapsed = time.time() - start_time
-                    print(f"   Обработано: {completed}/{total} | Найдено: {geocoded} | Игнорировано: {ignored} | Время: {elapsed:.0f}с")
+                    msg = f"Прогресс: {completed}/{total} | Найдено: {geocoded} | Игнорировано: {ignored} | Время: {elapsed:.0f}с"
+                    log_message(msg, 'INFO')
+                    print(f"   {msg}")
                     
             except Exception as e:
-                print(f"   ❌ Ошибка: {e}")
+                log_message(f"Ошибка в потоке: {e}", 'ERROR')
                 completed += 1
     
     return results, geocoded, ignored
@@ -337,7 +428,7 @@ def fetch_from_bitrix():
     start = 0
     limit = 50
     
-    print(f"📥 Загрузка из Битрикс24...")
+    log_message("📥 Загрузка из Битрикс24...", 'INFO')
     
     while True:
         params = {
@@ -360,14 +451,14 @@ def fetch_from_bitrix():
                 break
             
             all_items.extend(items)
-            print(f"   Загружено: {len(all_items)} записей")
+            log_message(f"Загружено: {len(all_items)} записей", 'INFO')
             
             if len(items) < limit:
                 break
             start += limit
             
         except Exception as e:
-            print(f"   ❌ Ошибка: {e}")
+            log_message(f"Ошибка загрузки: {e}", 'ERROR')
             break
     
     return all_items
@@ -376,29 +467,44 @@ def fetch_from_bitrix():
 # ОСНОВНАЯ ФУНКЦИЯ
 # ============================================================
 def main():
-    print(f"🔄 Обновление данных: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"   Яндекс ключ: {'✅ Есть' if YANDEX_API_KEY else '❌ Нет'}")
-    print(f"   Игнорируем стадии: {IGNORE_STAGES}")
+    # Инициализация директорий
+    init_directories()
     
-    os.makedirs('data', exist_ok=True)
+    # Очищаем лог при запуске
+    clear_log()
+    
+    log_message(f"🔄 Обновление данных: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 'INFO')
+    log_message(f"   Яндекс ключ: {'✅ Есть' if YANDEX_API_KEY else '❌ Нет'}", 'INFO')
+    log_message(f"   Игнорируем стадии: {IGNORE_STAGES}", 'INFO')
+    log_message(f"   Потоков: {MAX_WORKERS}", 'INFO')
+    
     cache = load_cache()
-    print(f"   Кэш: {len(cache)} записей")
+    log_message(f"   Кэш: {len(cache)} записей", 'INFO')
     
     items = fetch_from_bitrix()
     if not items:
-        print("❌ Нет данных из Битрикс24")
+        log_message("❌ Нет данных из Битрикс24", 'ERROR')
         return
     
-    # Фильтруем игнорируемые ДО геокодирования (для скорости)
     total_before = len(items)
     items_to_process = [item for item in items if not should_ignore(item.get('stageId', ''))]
     ignored_count = total_before - len(items_to_process)
-    print(f"   Всего: {total_before}, игнорируем: {ignored_count}, обрабатываем: {len(items_to_process)}")
+    log_message(f"   Всего: {total_before}, игнорируем: {ignored_count}, обрабатываем: {len(items_to_process)}", 'INFO')
     
-    print(f"📍 Геокодирование...")
+    # Показываем примеры очищенных адресов
+    log_message(f"\n📝 Примеры нормализации:", 'INFO')
+    for i, item in enumerate(items_to_process[:3]):
+        original = item.get(ADDRESS_FIELD, '')
+        clean = normalize_address(original)
+        log_message(f"   {i+1}. Оригинал: {original[:60]}...", 'INFO')
+        log_message(f"      Очищенный: {clean}", 'INFO')
+        print(f"   {i+1}. Оригинал: {original[:60]}...")
+        print(f"      Очищенный: {clean}")
+    
+    log_message(f"\n📍 Начинаем геокодирование...", 'INFO')
     results, geocoded, ignored = process_parallel(items_to_process, cache)
     
-    # Добавляем игнорируемые объекты в результат
+    # Добавляем игнорируемые объекты
     ignored_results = []
     for item in items:
         if should_ignore(item.get('stageId', '')):
@@ -419,18 +525,24 @@ def main():
     save_cache(cache)
     
     output_file = 'data/addresses.json'
-    with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump({
-            'updated_at': datetime.now().isoformat(),
-            'total': len(all_results),
-            'geocoded': geocoded,
-            'ignored': ignored_count,
-            'items': all_results
-        }, f, ensure_ascii=False, indent=2)
+    try:
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump({
+                'updated_at': datetime.now().isoformat(),
+                'total': len(all_results),
+                'geocoded': geocoded,
+                'ignored': ignored_count,
+                'items': all_results
+            }, f, ensure_ascii=False, indent=2)
+            f.flush()
+        log_message(f"✅ Файл сохранен: {output_file}", 'SUCCESS')
+    except Exception as e:
+        log_message(f"❌ Ошибка сохранения файла: {e}", 'ERROR')
     
     total = len(all_results)
-    print(f"\n✅ Готово! Всего: {total}, с координатами: {geocoded}, игнорировано: {ignored_count}")
-    print(f"   Файл: {output_file}")
+    log_message(f"\n✅ Готово! Всего: {total}, с координатами: {geocoded}, игнорировано: {ignored_count}", 'SUCCESS')
+    log_message(f"   Файл: {output_file}", 'INFO')
+    log_message(f"   Лог: {LOG_FILE}", 'INFO')
 
 if __name__ == '__main__':
     main()
