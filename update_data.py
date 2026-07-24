@@ -38,40 +38,115 @@ def save_cache(cache):
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА (МИНИМАЛЬНАЯ — только убираем мусор)
+# НОРМАЛИЗАЦИЯ АДРЕСА (исправленная)
 # ============================================================
 def normalize_address(address):
     """
     Минимальная очистка адреса:
     - Убираем звёздочки, решётки
     - Убираем лишние переносы строк
-    - Всё остальное ОСТАВЛЯЕМ для геокодера
+    - Заменяем сокращения на полные слова
     """
     if not address:
         return ''
     
     text = str(address).strip()
     
-    # Убираем звёздочки, решётки
+    # 1. Убираем мусорные символы
     text = text.replace('*', '').replace('#', '')
-    
-    # Заменяем переносы строк на пробелы
     text = text.replace('\n', ' ').replace('\r', ' ')
     
-    # Убираем множественные пробелы
-    text = re.sub(r'\s+', ' ', text)
+    # 2. Убираем скобки и их содержимое
+    text = re.sub(r'\([^)]*\)', '', text)
+    text = re.sub(r'\[[^\]]*\]', '', text)
     
-    # Убираем лишние запятые в конце
+    # 3. Убираем "г.", "Адрес:" в начале
+    text = re.sub(r'^г\.\s*', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
+    
+    # 4. Убираем ЖК, МЦД, МЦК, Метро с названиями
+    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
+    
+    # 5. Заменяем сокращения на полные слова (только целые слова!)
+    replacements = {
+        r'\bул\.\b': 'улица',
+        r'\bпр-д\b': 'проезд',
+        r'\bпр-кт\b': 'проспект',
+        r'\bпр-т\b': 'проспект',     # ДОБАВЛЕНО! для "пр-т Ленинградский"
+        r'\bпр\.\b': 'проезд',
+        r'\bпер\.\b': 'переулок',
+        r'\bш\.\b': 'шоссе',
+        r'\bнаб\.\b': 'набережная',
+        r'\bб-р\b': 'бульвар',
+        r'\bбул\.\b': 'бульвар',
+        r'\bпос\.\b': 'поселок',
+        r'\bд\.\b': 'дом',
+        r'\bк\.\b': 'корпус',
+        r'\bстр\.\b': 'строение',
+        r'\bкорп\.\b': 'корпус',
+    }
+    
+    for pattern, replacement in replacements.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    
+    # 6. Формат "23к7" -> "23 корпус 7"
+    text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
+    
+    # 7. Убираем детали (подъезд, этаж, квартира и т.д.)
+    patterns_to_remove = [
+        r'подъезд\s*\d+[А-Яа-яёЁ]?',
+        r'под\.?\s*\d+[А-Яа-яёЁ]?',
+        r'п\.\s*\d+[А-Яа-яёЁ]?',
+        r'этаж\s*\d+[А-Яа-яёЁ]?',
+        r'эт\.?\s*\d+[А-Яа-яёЁ]?',
+        r'эт\s*\d+[А-Яа-яёЁ]?',
+        r'кв\.\s*[\d/А-Яа-яёЁ]+',
+        r'квартира\s*[\d/А-Яа-яёЁ]+',
+        r'апарт\.?\s*[\d/А-Яа-яёЁ]+',
+        r'апартаменты\s*[\d/А-Яа-яёЁ]+',
+        r'пом\.\s*[\d/А-Яа-яёЁ]+',
+        r'помещение\s*[\d/А-Яа-яёЁ]+',
+        r'студия\s*[\d/А-Яа-яёЁ]+',
+        r'ком\.\s*[\d/А-Яа-яёЁ]+',
+        r'комната\s*[\d/А-Яа-яёЁ]+',
+        r'секция\s*\d+',
+        r'парадная\s*\d+',
+    ]
+    
+    for pattern in patterns_to_remove:
+        text = re.sub(r',?\s*' + pattern, '', text, flags=re.IGNORECASE)
+    
+    # 8. Убираем пояснения в конце
+    text = re.sub(r',?\s*код\s*домофона[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*домофон[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*ключ[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*дверь[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*вход[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*парковка[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*Wi-Fi[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*Важно[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*обязательно[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*геолокация[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*со стороны[\s\S]*$', '', text, flags=re.IGNORECASE)
+    
+    # 9. Чистим лишние запятые и пробелы
+    text = re.sub(r',+', ',', text)
+    text = re.sub(r'\s+', ' ', text)
     text = text.strip().rstrip(',').rstrip('.')
     
-    # Если адрес слишком короткий — возвращаем как есть
+    # 10. Если адрес слишком короткий — возвращаем как есть
     if len(text) < 5:
         return text
+    
+    # 11. Добавляем Москву если нет города
+    if not re.search(r'(Москва|Санкт-Петербург|Краснодар|Ялта|Сочи|Казань|Екатеринбург|Новосибирск|Мытищи|Видное|Люберцы|Химки|Долгопрудный|Ступино|Котельники|Красногорск|область|край|республика|район|поселок|деревня|село|город)', text, re.IGNORECASE):
+        text = 'Москва, ' + text
     
     return text
 
 # ============================================================
-# ГЕОКОДИРОВАНИЕ (с полным адресом)
+# ГЕОКОДИРОВАНИЕ
 # ============================================================
 def geocode_address(address, cache):
     if not address:
@@ -83,7 +158,6 @@ def geocode_address(address, cache):
     if cache_key in cache and cache[cache_key]:
         return cache[cache_key]
     
-    # Пробуем геокодеры
     coords = None
     
     # 1. Яндекс (если есть ключ)
@@ -107,7 +181,6 @@ def geocode_address(address, cache):
     return None
 
 def geocode_yandex(address):
-    """Геокодирование через Яндекс"""
     if not YANDEX_API_KEY:
         return None
     
@@ -129,7 +202,6 @@ def geocode_yandex(address):
                 pos = members[0]['GeoObject']['Point']['pos']
                 lon, lat = pos.split(' ')
                 lat, lon = float(lat), float(lon)
-                # Проверяем, что это не центр Москвы
                 if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
                     return {'lat': lat, 'lon': lon}
         return None
@@ -137,7 +209,6 @@ def geocode_yandex(address):
         return None
 
 def geocode_osm(address):
-    """Геокодирование через OpenStreetMap"""
     try:
         url = "https://nominatim.openstreetmap.org/search"
         params = {
@@ -166,14 +237,9 @@ def geocode_osm(address):
 # ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА
 # ============================================================
 def process_item(item, cache):
-    """Обработка одного элемента"""
-    # Берём ПОЛНЫЙ адрес
     address = item.get(ADDRESS_FIELD, '')
     clean = normalize_address(address) if address else ''
-    
-    coords = None
-    if clean:
-        coords = geocode_address(clean, cache)
+    coords = geocode_address(clean, cache) if clean else None
     
     return {
         'id': item.get('id'),
@@ -187,7 +253,6 @@ def process_item(item, cache):
     }, coords is not None
 
 def process_parallel(items, cache):
-    """Параллельная обработка всех адресов"""
     results = []
     geocoded = 0
     total = len(items)
