@@ -7,21 +7,19 @@ import os
 from datetime import datetime
 
 # ============================================================
-# КЛЮЧИ БЕРУТСЯ ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ (GitHub Secrets)
+# КОНФИГУРАЦИЯ (из секретов GitHub)
 # ============================================================
 BITRIX_WEBHOOK = os.environ.get('BITRIX_WEBHOOK')
 ENTITY_TYPE_ID = 1038
 ADDRESS_FIELD = 'ufCrm8FullAdress'
-YANDEX_API_KEY = os.environ.get('YANDEX_API_KEY')
+YANDEX_API_KEY = os.environ.get('YANDEX_API_KEY', '')
 
-# Проверяем, что ключи есть
+# Проверяем наличие ключей
 if not BITRIX_WEBHOOK:
     raise Exception("❌ BITRIX_WEBHOOK не задан в переменных окружения!")
-if not YANDEX_API_KEY:
-    print("⚠️ YANDEX_API_KEY не задан, используем OpenStreetMap")
 
 # ============================================================
-# КЭШ
+# КЭШ (храним в репозитории)
 # ============================================================
 CACHE_FILE = 'data/geocode_cache.json'
 
@@ -35,6 +33,246 @@ def load_cache():
 def save_cache(cache):
     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
+
+# ============================================================
+# НОРМАЛИЗАЦИЯ АДРЕСА
+# ============================================================
+def normalize_address(address):
+    """
+    Очищает адрес от лишней информации, оставляя только:
+    - Город
+    - Улица/проспект/бульвар и т.д.
+    - Номер дома (с корпусом, строением)
+    """
+    if not address:
+        return ''
+    
+    text = str(address).strip()
+    
+    # 1. Убираем звёздочки, решётки, лишние символы
+    text = text.replace('*', '').replace('#', '')
+    text = text.replace('\n', ' ').replace('\r', ' ')
+    
+    # 2. Убираем скобки и их содержимое
+    text = re.sub(r'\([^)]*\)', '', text)
+    text = re.sub(r'\[[^\]]*\]', '', text)
+    
+    # 3. Убираем "г.", "Адрес:" в начале
+    text = re.sub(r'^г\.\s*', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
+    
+    # 4. Убираем ЖК, МЦД, МЦК, Метро с названиями
+    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
+    
+    # 5. Заменяем сокращения на полные слова (только целые слова!)
+    replacements = {
+        r'\bул\.\b': 'улица',
+        r'\bпр-д\b': 'проезд',
+        r'\bпр-кт\b': 'проспект',
+        r'\bпр\.\b': 'проезд',
+        r'\bпер\.\b': 'переулок',
+        r'\bш\.\b': 'шоссе',
+        r'\bнаб\.\b': 'набережная',
+        r'\bб-р\b': 'бульвар',
+        r'\bбул\.\b': 'бульвар',
+        r'\bпос\.\b': 'поселок',
+        r'\bд\.\b': 'дом',
+        r'\bк\.\b': 'корпус',
+        r'\bстр\.\b': 'строение',
+        r'\bкорп\.\b': 'корпус',
+    }
+    
+    for pattern, replacement in replacements.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+    
+    # 6. Формат "23к7" -> "23 корпус 7" (только когда цифра+к+цифра)
+    text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
+    
+    # 7. Убираем детали (подъезд, этаж, квартира и т.д.)
+    patterns_to_remove = [
+        r'подъезд\s*\d+[А-Яа-яёЁ]?',
+        r'под\.?\s*\d+[А-Яа-яёЁ]?',
+        r'п\.\s*\d+[А-Яа-яёЁ]?',
+        r'этаж\s*\d+[А-Яа-яёЁ]?',
+        r'эт\.?\s*\d+[А-Яа-яёЁ]?',
+        r'эт\s*\d+[А-Яа-яёЁ]?',
+        r'кв\.\s*[\d/А-Яа-яёЁ]+',
+        r'квартира\s*[\d/А-Яа-яёЁ]+',
+        r'апарт\.?\s*[\d/А-Яа-яёЁ]+',
+        r'апартаменты\s*[\d/А-Яа-яёЁ]+',
+        r'пом\.\s*[\d/А-Яа-яёЁ]+',
+        r'помещение\s*[\d/А-Яа-яёЁ]+',
+        r'студия\s*[\d/А-Яа-яёЁ]+',
+        r'ком\.\s*[\d/А-Яа-яёЁ]+',
+        r'комната\s*[\d/А-Яа-яёЁ]+',
+        r'секция\s*\d+',
+        r'парадная\s*\d+',
+    ]
+    
+    for pattern in patterns_to_remove:
+        text = re.sub(r',?\s*' + pattern, '', text, flags=re.IGNORECASE)
+    
+    # 8. Убираем пояснения в конце
+    text = re.sub(r',?\s*код\s*домофона[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*домофон[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*ключ[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*дверь[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*вход[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*парковка[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*Wi-Fi[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*Важно[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*обязательно[\s\S]*$', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*геолокация[\s\S]*$', '', text, flags=re.IGNORECASE)
+    
+    # 9. Чистим лишние запятые и пробелы
+    text = re.sub(r',+', ',', text)
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip().rstrip(',').rstrip('.')
+    
+    # 10. Если адрес слишком короткий — возвращаем как есть
+    if len(text) < 5:
+        return text
+    
+    # 11. Добавляем Москву если нет города
+    if not re.search(r'(Москва|Санкт-Петербург|Краснодар|Ялта|Сочи|Казань|Екатеринбург|Новосибирск|Мытищи|Видное|Люберцы|Химки|Долгопрудный|Ступино|Котельники|Красногорск|область|край|республика|район|поселок|деревня|село|город)', text, re.IGNORECASE):
+        text = 'Москва, ' + text
+    
+    return text
+
+# ============================================================
+# ГЕОКОДИРОВАНИЕ (Яндекс + OSM)
+# ============================================================
+def geocode_address(address, cache):
+    if not address:
+        return None
+    
+    cache_key = hashlib.md5(address.encode()).hexdigest()
+    
+    # Проверяем кэш
+    if cache_key in cache and cache[cache_key]:
+        return cache[cache_key]
+    
+    # Получаем варианты адреса
+    variants = get_address_variants(address)
+    
+    # Пробуем геокодеры по очереди
+    geocoders = []
+    
+    # 1. Яндекс (если есть ключ)
+    if YANDEX_API_KEY:
+        geocoders.append(('yandex', geocode_yandex))
+    
+    # 2. OpenStreetMap Nominatim (бесплатно, без ключа)
+    geocoders.append(('osm', geocode_osm))
+    
+    for name, geocoder_func in geocoders:
+        for addr in variants:
+            try:
+                coords = geocoder_func(addr)
+                if coords:
+                    # Проверяем, что это не центр Москвы (значит нашли точный адрес)
+                    if abs(coords['lat'] - 55.7558) > 0.01 or abs(coords['lon'] - 37.6173) > 0.01:
+                        cache[cache_key] = coords
+                        save_cache(cache)
+                        print(f"   ✅ Геокодировано ({name}): {addr[:50]}...")
+                        return coords
+            except Exception as e:
+                print(f"   ⚠️ Ошибка {name}: {e}")
+                continue
+            
+            # Задержка между запросами (для OSM)
+            if name == 'osm':
+                time.sleep(1)
+    
+    # Если ничего не нашли
+    cache[cache_key] = None
+    save_cache(cache)
+    return None
+
+def get_address_variants(address):
+    """Генерирует варианты адреса для лучшего поиска"""
+    variants = [address]
+    
+    # Убираем "корпус" -> "к"
+    if 'корпус' in address:
+        variants.append(re.sub(r'корпус\s*(\d+)', r'к\1', address))
+    
+    # Убираем "строение" -> "стр"
+    if 'строение' in address:
+        variants.append(re.sub(r'строение\s*(\d+)', r'стр\1', address))
+    
+    # Только улица и дом (без города)
+    parts = address.split(',')
+    if len(parts) > 1:
+        street_house = parts[0] + ',' + parts[1] if len(parts) > 1 else parts[0]
+        variants.append(street_house.strip())
+    
+    # Без города
+    for city in ['Москва, ', 'Санкт-Петербург, ', 'Краснодар, ', 'Ялта, ']:
+        if address.startswith(city):
+            variants.append(address[len(city):])
+            break
+    
+    # С "Россия" в конце
+    if not address.endswith(', Россия'):
+        variants.append(address + ', Россия')
+    
+    # Убираем дубликаты
+    return list(dict.fromkeys(variants))
+
+def geocode_yandex(address):
+    """Геокодирование через Яндекс (нужен API ключ)"""
+    if not YANDEX_API_KEY:
+        return None
+    
+    try:
+        url = "https://geocode-maps.yandex.ru/1.x/"
+        params = {
+            'apikey': YANDEX_API_KEY,
+            'geocode': address,
+            'format': 'json',
+            'results': 1,
+            'lang': 'ru_RU'
+        }
+        response = requests.get(url, params=params, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            members = data.get('response', {}).get('GeoObjectCollection', {}).get('featureMember', [])
+            if members:
+                pos = members[0]['GeoObject']['Point']['pos']
+                lon, lat = pos.split(' ')
+                return {'lat': float(lat), 'lon': float(lon)}
+        
+        return None
+    except:
+        return None
+
+def geocode_osm(address):
+    """Геокодирование через OpenStreetMap Nominatim (бесплатно)"""
+    try:
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            'q': address,
+            'format': 'json',
+            'limit': 1,
+            'accept-language': 'ru'
+        }
+        response = requests.get(
+            url,
+            params=params,
+            headers={'User-Agent': 'MapApp/1.0 (https://i-grinev.github.io/map-app)'},
+            timeout=5
+        )
+        
+        if response.status_code == 200 and response.json():
+            data = response.json()[0]
+            return {'lat': float(data['lat']), 'lon': float(data['lon'])}
+        
+        return None
+    except:
+        return None
 
 # ============================================================
 # ЗАПРОС К БИТРИКС24
@@ -80,146 +318,28 @@ def fetch_from_bitrix():
     return all_items
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА
-# ============================================================
-def normalize_address(address):
-    if not address:
-        return ''
-    
-    text = str(address).strip()
-    text = re.sub(r'[*#]', '', text)
-    text = re.sub(r'\([^)]*\)', '', text)
-    text = re.sub(r'\[[^\]]*\]', '', text)
-    text = re.sub(r'^г\.\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
-    
-    replacements = {
-        'ул.': 'улица ',
-        'пр-д': 'проезд ',
-        'пр-кт': 'проспект ',
-        'пр.': 'проезд ',
-        'пер.': 'переулок ',
-        'ш.': 'шоссе ',
-        'наб.': 'набережная ',
-        'б-р': 'бульвар ',
-        'бул.': 'бульвар ',
-        'пос.': 'поселок ',
-        'д.': 'дом ',
-        'к.': 'корпус ',
-        'стр.': 'строение ',
-        'корп.': 'корпус '
-    }
-    
-    for pattern, replacement in replacements.items():
-        text = re.sub(r'\b' + pattern + r'\s*', replacement, text, flags=re.IGNORECASE)
-    
-    text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
-    text = re.sub(r',\s*(подъезд|под\.?|п\.)\s*\d+[А-Яа-яёЁ]?', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',\s*(этаж|эт\.?|эт)\s*\d+[А-Яа-яёЁ]?', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',\s*(кв\.|квартира|апарт\.?|апартаменты|пом\.|помещение|студия|ком\.|комната)\s*[\d/А-Яа-яёЁ]+', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',\s*(код\s*домофона|домофон|ключ|дверь|вход|парковка|Wi-Fi)[\s\S]*$', '', text, flags=re.IGNORECASE)
-    
-    text = re.sub(r',+', ',', text)
-    text = re.sub(r'\s+', ' ', text)
-    text = text.strip().rstrip(',').rstrip('.')
-    
-    if len(text) < 5:
-        return text
-    
-    if not re.search(r'(Москва|Санкт-Петербург|Краснодар|область|край|республика|район|поселок|деревня|село|город)', text, re.IGNORECASE):
-        text = 'Москва, ' + text
-    
-    return text
-
-# ============================================================
-# ГЕОКОДИРОВАНИЕ
-# ============================================================
-def geocode_address(address, cache):
-    cache_key = hashlib.md5(address.encode()).hexdigest()
-    
-    if cache_key in cache and cache[cache_key]:
-        return cache[cache_key]
-    
-    # Яндекс.Карты (если есть ключ)
-    if YANDEX_API_KEY:
-        try:
-            url = "https://geocode-maps.yandex.ru/1.x/"
-            params = {
-                'apikey': YANDEX_API_KEY,
-                'geocode': address,
-                'format': 'json',
-                'results': 1,
-                'lang': 'ru_RU'
-            }
-            response = requests.get(url, params=params, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                members = data.get('response', {}).get('GeoObjectCollection', {}).get('featureMember', [])
-                if members:
-                    pos = members[0]['GeoObject']['Point']['pos']
-                    lon, lat = pos.split(' ')
-                    lat, lon = float(lat), float(lon)
-                    if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
-                        coords = {'lat': lat, 'lon': lon}
-                        cache[cache_key] = coords
-                        return coords
-        except:
-            pass
-    
-    # OpenStreetMap (бесплатно, без ключа)
-    try:
-        variants = get_address_variants(address)
-        for addr in variants:
-            url = f"https://nominatim.openstreetmap.org/search?q={requests.utils.quote(addr)}&format=json&limit=1&accept-language=ru"
-            response = requests.get(url, headers={'User-Agent': 'MapApp/1.0'}, timeout=5)
-            if response.status_code == 200 and response.json():
-                data = response.json()[0]
-                lat, lon = float(data['lat']), float(data['lon'])
-                if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
-                    coords = {'lat': lat, 'lon': lon}
-                    cache[cache_key] = coords
-                    return coords
-            time.sleep(1)
-    except:
-        pass
-    
-    return None
-
-def get_address_variants(address):
-    variants = [address]
-    if 'корпус' in address:
-        variants.append(re.sub(r'корпус\s*(\d+)', r'к\1', address))
-    if 'строение' in address:
-        variants.append(re.sub(r'строение\s*(\d+)', r'стр\1', address))
-    parts = address.split(',')
-    if len(parts) > 1:
-        variants.append(parts[0] + ',' + parts[1])
-    for city in ['Москва, ', 'Санкт-Петербург, ', 'Краснодар, ']:
-        if address.startswith(city):
-            variants.append(address[len(city):])
-            break
-    if 'Россия' not in address:
-        variants.append(address + ', Россия')
-    return list(dict.fromkeys(variants))
-
-# ============================================================
 # ОСНОВНАЯ ФУНКЦИЯ
 # ============================================================
 def main():
     print(f"🔄 Обновление данных: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"   Вебхук: {BITRIX_WEBHOOK[:50]}...")
+    print(f"   Яндекс ключ: {'✅ Есть' if YANDEX_API_KEY else '❌ Нет'}")
     
+    # Загружаем кэш
     cache = load_cache()
-    items = fetch_from_bitrix()
+    print(f"   Кэш: {len(cache)} записей")
     
+    # Получаем данные из Битрикса
+    items = fetch_from_bitrix()
     if not items:
         print("❌ Нет данных из Битрикс24")
         return
     
+    # Обрабатываем
     print("📍 Геокодирование...")
     results = []
     geocoded = 0
+    total = len(items)
     
     for i, item in enumerate(items):
         address = item.get(ADDRESS_FIELD, '')
@@ -242,9 +362,10 @@ def main():
             'stage_name': item.get('stage_name', '')
         })
         
-        if (i + 1) % 50 == 0:
-            print(f"   Обработано: {i+1}/{len(items)}")
+        if (i + 1) % 50 == 0 or i == total - 1:
+            print(f"   Обработано: {i+1}/{total} | Найдено: {geocoded}")
     
+    # Сохраняем результаты
     output_file = 'data/addresses.json'
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump({
@@ -254,9 +375,8 @@ def main():
             'items': results
         }, f, ensure_ascii=False, indent=2)
     
-    save_cache(cache)
-    
     print(f"✅ Готово! Всего: {len(results)}, с координатами: {geocoded} ({geocoded/len(results)*100:.0f}%)")
+    print(f"   Файл: {output_file}")
 
 if __name__ == '__main__':
     main()
