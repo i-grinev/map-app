@@ -13,24 +13,24 @@
         
         .header {
             background: white;
-            padding: 10px 20px;
+            padding: 8px 16px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
             z-index: 1000;
             position: relative;
         }
-        .header h1 { font-size: 17px; color: #1a73e8; }
-        .header h1 .badge { font-size: 11px; background: #e8eaed; color: #5f6368; padding: 2px 8px; border-radius: 12px; font-weight: normal; margin-left: 8px; }
+        .header h1 { font-size: 16px; color: #1a73e8; }
+        .header h1 .badge { font-size: 10px; background: #e8eaed; color: #5f6368; padding: 2px 8px; border-radius: 12px; font-weight: normal; margin-left: 8px; }
         
-        .controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-        .controls input { padding: 5px 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 13px; min-width: 150px; outline: none; }
+        .controls { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+        .controls input { padding: 5px 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 12px; min-width: 130px; outline: none; }
         .controls input:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
         
-        .btn { padding: 5px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .btn { padding: 5px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
         .btn-primary { background: #1a73e8; color: white; }
         .btn-primary:hover { background: #1557b0; }
         .btn-warning { background: #fbbc04; color: #333; }
@@ -38,8 +38,8 @@
         .btn-success { background: #34a853; color: white; }
         .btn-success:hover { background: #2d9248; }
         
-        .stats { font-size: 12px; color: #5f6368; padding: 4px 8px; background: #f1f3f4; border-radius: 4px; }
-        #map { height: calc(100vh - 57px); width: 100%; }
+        .stats { font-size: 11px; color: #5f6368; padding: 3px 8px; background: #f1f3f4; border-radius: 4px; }
+        #map { height: calc(100vh - 52px); width: 100%; }
         
         .loading-overlay {
             position: fixed;
@@ -52,34 +52,34 @@
         }
         .loading-overlay.hidden { display: none; }
         
-        .loading-box { background: white; padding: 25px 35px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; }
-        .spinner { width: 32px; height: 32px; border: 3px solid #e8eaed; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+        .loading-box { background: white; padding: 20px 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; }
+        .spinner { width: 28px; height: 28px; border: 3px solid #e8eaed; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-box p { color: #5f6368; font-size: 13px; }
+        .loading-box p { color: #5f6368; font-size: 12px; }
         
         .updated-at {
             position: fixed;
-            bottom: 15px;
-            left: 15px;
-            font-size: 10px;
+            bottom: 12px;
+            left: 12px;
+            font-size: 9px;
             color: #999;
             background: rgba(255,255,255,0.9);
-            padding: 3px 10px;
+            padding: 2px 10px;
             border-radius: 12px;
             z-index: 1000;
         }
         
         .layer-control {
             position: fixed;
-            bottom: 15px;
-            right: 15px;
+            bottom: 12px;
+            right: 12px;
             background: white;
-            padding: 6px 10px;
+            padding: 5px 8px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.15);
             z-index: 1000;
             display: flex;
-            gap: 4px;
+            gap: 3px;
             flex-wrap: wrap;
         }
         .layer-control button {
@@ -88,32 +88,102 @@
             border-radius: 4px;
             background: white;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 10px;
             transition: all 0.2s;
         }
         .layer-control button:hover { background: #f0f0f0; }
         .layer-control button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
         
-        /* Стили для текстовых меток на карте */
-        .label-marker {
-            background: rgba(26, 115, 232, 0.85);
+        /* ============================================================
+           СТИЛИ ДЛЯ МАРКЕРОВ С НАЗВАНИЯМИ
+           ============================================================ */
+        
+        /* Контейнер метки: точка + текст на фоне */
+        .marker-container {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+        .marker-container:hover {
+            transform: scale(1.05);
+        }
+        
+        /* Точка */
+        .marker-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #1a73e8;
+            border: 2px solid white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            flex-shrink: 0;
+        }
+        
+        /* Текст с фоном */
+        .marker-label {
+            background: rgba(26, 115, 232, 0.88);
             color: white;
-            padding: 2px 8px;
-            border-radius: 4px;
+            padding: 2px 10px;
+            border-radius: 12px;
             font-size: 11px;
             font-weight: 500;
             white-space: nowrap;
             box-shadow: 0 1px 4px rgba(0,0,0,0.2);
             border: 1px solid rgba(255,255,255,0.3);
+            backdrop-filter: blur(2px);
+            transition: all 0.2s;
             pointer-events: none;
         }
         
+        /* Тултип при наведении (адрес) */
+        .marker-tooltip {
+            display: none;
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.85);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            white-space: nowrap;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            pointer-events: none;
+            margin-bottom: 6px;
+            z-index: 1000;
+        }
+        .marker-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: rgba(0,0,0,0.85);
+        }
+        
+        .marker-container:hover .marker-tooltip {
+            display: block;
+        }
+        
+        .marker-container:hover .marker-label {
+            background: rgba(26, 115, 232, 1);
+            box-shadow: 0 2px 8px rgba(26,115,232,0.4);
+        }
+        
         @media (max-width: 768px) {
-            .header { flex-direction: column; align-items: stretch; gap: 6px; }
+            .header { flex-direction: column; align-items: stretch; gap: 4px; }
             .controls { justify-content: stretch; }
             .controls input { min-width: unset; width: 100%; }
-            .layer-control { bottom: 10px; right: 10px; left: 10px; justify-content: center; }
-            .label-marker { font-size: 9px; padding: 1px 5px; }
+            .layer-control { bottom: 8px; right: 8px; left: 8px; justify-content: center; }
+            .marker-label { font-size: 9px; padding: 1px 6px; }
+            .marker-dot { width: 8px; height: 8px; }
+            .marker-tooltip { font-size: 9px; max-width: 200px; }
         }
     </style>
 </head>
@@ -155,10 +225,10 @@
     // ============================================================
     var map = null;
     var markerLayer = null;
-    var labelLayer = null;
     var allData = [];
     var tileLayers = {};
     var currentLayer = null;
+    var markers = [];
     
     // ============================================================
     // ЗАГРУЗКА ДАННЫХ
@@ -192,64 +262,66 @@
     }
     
     // ============================================================
-    // ОТРИСОВКА МАРКЕРОВ И НАЗВАНИЙ
+    // ОТРИСОВКА МАРКЕРОВ С НАЗВАНИЯМИ
     // ============================================================
     function renderMarkers() {
         if (!markerLayer) return;
         markerLayer.clearLayers();
-        if (labelLayer) labelLayer.clearLayers();
+        markers = [];
         
         if (allData.length === 0) return;
         
-        // Создаём слой для меток
-        labelLayer = L.layerGroup().addTo(map);
-        
         for (var i = 0; i < allData.length; i++) {
             var item = allData[i];
-            
-            // Точка на карте (маленькая, едва заметная)
-            var dotIcon = L.divIcon({
-                html: '<div style="' +
-                    'width: 6px; height: 6px;' +
-                    'background: #1a73e8;' +
-                    'border-radius: 50%;' +
-                    'border: 2px solid white;' +
-                    'box-shadow: 0 0 4px rgba(0,0,0,0.3);' +
-                    '"></div>',
-                className: '',
-                iconSize: [6, 6],
-                iconAnchor: [3, 3]
-            });
-            
-            var marker = L.marker([item.lat, item.lon], { 
-                icon: dotIcon,
-                interactive: false
-            });
-            markerLayer.addLayer(marker);
-            
-            // Текстовое название (всегда видно)
             var title = item.title || '';
-            if (title.length > 20) {
-                title = title.substring(0, 18) + '…';
+            var address = item.address_clean || item.address || '';
+            
+            // Обрезаем длинные названия
+            var displayTitle = title;
+            if (displayTitle.length > 25) {
+                displayTitle = displayTitle.substring(0, 23) + '…';
             }
             
-            if (title) {
-                var labelIcon = L.divIcon({
-                    html: '<div class="label-marker">' + title + '</div>',
-                    className: '',
-                    iconSize: [0, 0],
-                    iconAnchor: [0, -10]
-                });
-                
-                var label = L.marker([item.lat, item.lon], {
-                    icon: labelIcon,
-                    interactive: false,
-                    keyboard: false
-                });
-                labelLayer.addLayer(label);
-            }
+            // Создаём HTML для метки с точкой, текстом и тултипом
+            var html = '<div class="marker-container" data-index="' + i + '">' +
+                '<div class="marker-dot" style="background: #1a73e8;"></div>' +
+                '<span class="marker-label">' + displayTitle + '</span>' +
+                '<div class="marker-tooltip">' + address + '</div>' +
+                '</div>';
+            
+            var icon = L.divIcon({
+                html: html,
+                className: '',
+                iconSize: [0, 0],
+                iconAnchor: [0, -8]
+            });
+            
+            var marker = L.marker([item.lat, item.lon], {
+                icon: icon,
+                interactive: true,
+                keyboard: false
+            });
+            
+            // Сохраняем индекс
+            marker._index = i;
+            
+            // Клик по маркеру — масштабирование
+            marker.on('click', function(e) {
+                var idx = e.target._index;
+                var item = allData[idx];
+                if (item) {
+                    map.setView([item.lat, item.lon], 17, {
+                        animate: true,
+                        duration: 0.5
+                    });
+                }
+            });
+            
+            markerLayer.addLayer(marker);
+            markers.push(marker);
         }
         
+        // Центрируем карту
         if (allData.length > 0) {
             var bounds = markerLayer.getBounds();
             if (bounds.isValid()) {
@@ -266,36 +338,25 @@
         if (!query) return;
         
         var found = false;
-        markerLayer.eachLayer(function(marker) {
-            var item = allData[marker._index];
-            if (item) {
-                var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1);
-                
-                if (match) {
-                    markerLayer.addLayer(marker);
-                    if (!found) {
-                        map.setView([item.lat, item.lon], 15);
-                        found = true;
-                    }
-                } else {
-                    markerLayer.removeLayer(marker);
-                }
-            }
-        });
         
-        // Скрываем/показываем метки
-        labelLayer.eachLayer(function(label) {
-            var idx = label._index;
-            var item = allData[idx];
-            if (item) {
-                var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1);
-                if (match) {
-                    labelLayer.addLayer(label);
-                } else {
-                    labelLayer.removeLayer(label);
+        for (var i = 0; i < markers.length; i++) {
+            var marker = markers[i];
+            var item = allData[marker._index];
+            var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1);
+            
+            if (match) {
+                markerLayer.addLayer(marker);
+                if (!found) {
+                    map.setView([item.lat, item.lon], 17, {
+                        animate: true,
+                        duration: 0.5
+                    });
+                    found = true;
                 }
+            } else {
+                markerLayer.removeLayer(marker);
             }
-        });
+        }
         
         if (!found) {
             alert('Ничего не найдено');
@@ -305,20 +366,9 @@
     
     function clearSearch() {
         document.getElementById('searchInput').value = '';
-        
-        for (var i = 0; i < allData.length; i++) {
-            markerLayer.eachLayer(function(marker) {
-                if (marker._index === i) {
-                    markerLayer.addLayer(marker);
-                }
-            });
-            labelLayer.eachLayer(function(label) {
-                if (label._index === i) {
-                    labelLayer.addLayer(label);
-                }
-            });
+        for (var i = 0; i < markers.length; i++) {
+            markerLayer.addLayer(markers[i]);
         }
-        
         if (allData.length > 0) {
             var bounds = markerLayer.getBounds();
             if (bounds.isValid()) {
