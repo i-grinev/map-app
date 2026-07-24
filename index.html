@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📍 Карта объектов</title>
+    
+    <script src="https://api-maps.yandex.ru/2.0/?apikey=4a65ae8e-4fce-4b73-b0e8-9488d551b04f&lang=ru-RU" type="text/javascript"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; height: 100vh; }
+        
+        .header {
+            background: white;
+            padding: 12px 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            z-index: 1000;
+            position: relative;
+        }
+        .header h1 { font-size: 18px; color: #1a73e8; }
+        .header h1 .badge { font-size: 11px; background: #e8eaed; color: #5f6368; padding: 2px 8px; border-radius: 12px; font-weight: normal; margin-left: 8px; }
+        
+        .controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .controls input { padding: 6px 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 13px; min-width: 160px; outline: none; }
+        .controls input:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+        
+        .btn { padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .btn-primary { background: #1a73e8; color: white; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-warning { background: #fbbc04; color: #333; }
+        .btn-warning:hover { background: #e5ac00; }
+        .btn-success { background: #34a853; color: white; }
+        .btn-success:hover { background: #2d9248; }
+        
+        .stats { font-size: 12px; color: #5f6368; padding: 4px 8px; background: #f1f3f4; border-radius: 4px; white-space: nowrap; }
+        #map { height: calc(100vh - 65px); width: 100%; }
+        
+        .legend {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 14px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            max-height: 200px;
+            overflow-y: auto;
+            min-width: 120px;
+            font-size: 12px;
+        }
+        .legend h4 { margin-bottom: 6px; color: #202124; font-size: 13px; }
+        .legend-item { display: flex; align-items: center; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+        .legend-item:hover { background: #f1f3f4; }
+        .legend-color { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
+        .legend-count { margin-left: auto; color: #5f6368; font-size: 11px; padding-left: 8px; }
+        .legend-stats { margin-top: 6px; padding-top: 6px; border-top: 1px solid #e8eaed; font-size: 11px; color: #5f6368; }
+        
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(255,255,255,0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+        }
+        .loading-overlay.hidden { display: none; }
+        
+        .loading-box { background: white; padding: 25px 35px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; }
+        .spinner { width: 32px; height: 32px; border: 3px solid #e8eaed; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-box p { color: #5f6368; font-size: 13px; }
+        
+        .updated-at {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            font-size: 10px;
+            color: #999;
+            background: rgba(255,255,255,0.9);
+            padding: 3px 10px;
+            border-radius: 12px;
+            z-index: 1000;
+        }
+        
+        @media (max-width: 768px) {
+            .header { flex-direction: column; align-items: stretch; gap: 6px; }
+            .controls { justify-content: stretch; }
+            .controls input { min-width: unset; width: 100%; }
+            .legend { bottom: 10px; right: 10px; left: 10px; max-height: 130px; }
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="loading-overlay" id="loading">
+        <div class="loading-box">
+            <div class="spinner"></div>
+            <p>Загрузка данных...</p>
+        </div>
+    </div>
+    
+    <div class="header">
+        <h1>📍 Карта объектов <span class="badge" id="updateBadge">загрузка...</span></h1>
+        <div class="controls">
+            <input type="text" id="searchInput" placeholder="🔍 Поиск..." />
+            <button class="btn btn-primary" onclick="searchAddress()">Найти</button>
+            <button class="btn btn-warning" onclick="clearSearch()">✕</button>
+            <button class="btn btn-success" onclick="loadData()">🔄</button>
+            <span class="stats" id="stats">Загрузка...</span>
+        </div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="legend" id="legend">
+        <h4>📊 Стадии</h4>
+        <div id="legendContent"></div>
+        <div class="legend-stats" id="legendStats"></div>
+    </div>
+    
+    <div class="updated-at" id="updatedAt"></div>
+    
+    <script>
+        const STAGE_COLORS = {
+            'UC_WXDLF4': '#FF6B6B',
+            'UC_QA1YNG': '#4ECDC4',
+            'SUCCESS': '#45B7D1',
+            'NEW': '#96CEB4',
+            'UC_0GI6RE': '#FFEAA7',
+            'default': '#A8A8A8'
+        };
+        
+        let map = null;
+        let placemarks = [];
+        let allData = [];
+        let currentFilter = null;
+        
+        ymaps.ready(function() {
+            map = new ymaps.Map('map', {
+                center: [55.76, 37.64],
+                zoom: 11,
+                controls: ['zoomControl', 'fullscreenControl']
+            });
+            loadData();
+        });
+        
+        function loadData() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('stats').textContent = '⏳...';
+            
+            fetch('data/addresses.json?t=' + Date.now())
+                .then(response => {
+                    if (!response.ok) throw new Error('Файл не найден');
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('loading').classList.add('hidden');
+                    allData = data.items.filter(item => item.lat && item.lon);
+                    
+                    document.getElementById('stats').textContent = `Всего: ${allData.length}`;
+                    document.getElementById('updateBadge').textContent = new Date(data.updated_at).toLocaleString('ru-RU');
+                    document.getElementById('updatedAt').textContent = '🔄 ' + new Date(data.updated_at).toLocaleString('ru-RU');
+                    
+                    renderMarkers();
+                    updateLegend();
+                })
+                .catch(error => {
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('stats').textContent = '❌ Ошибка';
+                    document.getElementById('updateBadge').textContent = 'ошибка';
+                    console.error(error);
+                });
+        }
+        
+        function renderMarkers() {
+            placemarks.forEach(p => map.geoObjects.remove(p));
+            placemarks = [];
+            if (allData.length === 0) return;
+            
+            allData.forEach((item, index) => {
+                const color = STAGE_COLORS[item.stage_id] || STAGE_COLORS.default;
+                const stage = item.stage_id || 'Без стадии';
+                
+                const placemark = new ymaps.Placemark(
+                    [item.lat, item.lon],
+                    {
+                        id: index,
+                        title: item.title || 'Без названия',
+                        address: item.address_clean || item.address || '',
+                        stage: stage,
+                        balloonContentHeader: `<b>${item.title || 'Без названия'}</b>`,
+                        balloonContentBody: `
+                            <div style="max-width: 260px; font-size: 13px;">
+                                <p><strong>📍 Адрес:</strong> ${item.address_clean || item.address || 'Не указан'}</p>
+                                <p><strong>📊 Стадия:</strong> ${stage}</p>
+                                <p><strong>📌 Координаты:</strong> ${item.lat}, ${item.lon}</p>
+                            </div>
+                        `
+                    },
+                    {
+                        preset: 'islands#circleIcon',
+                        iconColor: color,
+                        draggable: false,
+                        openBalloonOnClick: true
+                    }
+                );
+                
+                placemarks.push(placemark);
+                map.geoObjects.add(placemark);
+            });
+            
+            if (allData.length > 0) {
+                const bounds = map.geoObjects.getBounds();
+                if (bounds) map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+            }
+        }
+        
+        function updateLegend() {
+            const stages = {};
+            allData.forEach(item => {
+                const stage = item.stage_id || 'Без стадии';
+                stages[stage] = (stages[stage] || 0) + 1;
+            });
+            
+            const legendHtml = Object.entries(stages)
+                .sort((a, b) => b[1] - a[1])
+                .map(([stage, count]) => `
+                    <div class="legend-item" onclick="filterByStage('${stage}')">
+                        <div class="legend-color" style="background: ${STAGE_COLORS[stage] || STAGE_COLORS.default};"></div>
+                        <span>${stage}</span>
+                        <span class="legend-count">${count}</span>
+                    </div>
+                `)
+                .join('');
+            
+            document.getElementById('legendContent').innerHTML = legendHtml || 'Нет данных';
+            document.getElementById('legendStats').textContent = `Всего объектов: ${allData.length}`;
+        }
+        
+        function filterByStage(stage) {
+            currentFilter = currentFilter === stage ? null : stage;
+            placemarks.forEach((p, index) => {
+                const item = allData[index];
+                p.options.set('visible', !currentFilter || item.stage_id === currentFilter);
+            });
+            
+            document.querySelectorAll('.legend-item').forEach(el => {
+                el.style.background = el.textContent.trim() === stage && currentFilter ? '#e8f0fe' : 'transparent';
+            });
+        }
+        
+        function searchAddress() {
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            if (!query) return;
+            
+            let found = false;
+            placemarks.forEach((p, index) => {
+                const item = allData[index];
+                const match = (item.title?.toLowerCase().includes(query) || 
+                             item.address_clean?.toLowerCase().includes(query) ||
+                             item.address?.toLowerCase().includes(query));
+                
+                if (match) {
+                    p.options.set('visible', true);
+                    if (!found) {
+                        map.setCenter(p.geometry.getCoordinates(), 15);
+                        p.balloon.open();
+                        found = true;
+                    }
+                } else if (!currentFilter) {
+                    p.options.set('visible', false);
+                }
+            });
+            
+            if (!found) { alert('🔍 Ничего не найдено'); clearSearch(); }
+        }
+        
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            currentFilter = null;
+            placemarks.forEach(p => p.options.set('visible', true));
+            document.querySelectorAll('.legend-item').forEach(el => el.style.background = 'transparent');
+            if (allData.length > 0) {
+                const bounds = map.geoObjects.getBounds();
+                if (bounds) map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+            }
+        }
+        
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') searchAddress();
+        });
+        
+        setInterval(() => loadData(), 5 * 60 * 1000);
+    </script>
+</body>
+</html>
