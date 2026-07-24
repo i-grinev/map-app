@@ -129,6 +129,9 @@
     <div class="updated-at" id="updatedAt"></div>
     
     <script>
+        // ============================================================
+        // КОНФИГУРАЦИЯ
+        // ============================================================
         const STAGE_COLORS = {
             'UC_WXDLF4': '#FF6B6B',
             'UC_QA1YNG': '#4ECDC4',
@@ -138,11 +141,17 @@
             'default': '#A8A8A8'
         };
         
+        // ============================================================
+        // ПЕРЕМЕННЫЕ
+        // ============================================================
         let map = null;
         let placemarks = [];
         let allData = [];
         let currentFilter = null;
         
+        // ============================================================
+        // ИНИЦИАЛИЗАЦИЯ КАРТЫ
+        // ============================================================
         ymaps.ready(function() {
             map = new ymaps.Map('map', {
                 center: [55.76, 37.64],
@@ -152,58 +161,69 @@
             loadData();
         });
         
+        // ============================================================
+        // ЗАГРУЗКА ДАННЫХ
+        // ============================================================
         function loadData() {
             document.getElementById('loading').classList.remove('hidden');
             document.getElementById('stats').textContent = '⏳...';
             
             fetch('data/addresses.json?t=' + Date.now())
-                .then(response => {
+                .then(function(response) {
                     if (!response.ok) throw new Error('Файл не найден');
                     return response.json();
                 })
-                .then(data => {
+                .then(function(data) {
                     document.getElementById('loading').classList.add('hidden');
-                    allData = data.items.filter(item => item.lat && item.lon);
+                    allData = data.items.filter(function(item) {
+                        return item.lat && item.lon;
+                    });
                     
-                    document.getElementById('stats').textContent = `Всего: ${allData.length}`;
+                    document.getElementById('stats').textContent = 'Всего: ' + allData.length;
                     document.getElementById('updateBadge').textContent = new Date(data.updated_at).toLocaleString('ru-RU');
                     document.getElementById('updatedAt').textContent = '🔄 ' + new Date(data.updated_at).toLocaleString('ru-RU');
                     
                     renderMarkers();
                     updateLegend();
                 })
-                .catch(error => {
+                .catch(function(error) {
                     document.getElementById('loading').classList.add('hidden');
                     document.getElementById('stats').textContent = '❌ Ошибка';
                     document.getElementById('updateBadge').textContent = 'ошибка';
-                    console.error(error);
+                    console.error('Ошибка:', error);
                 });
         }
         
+        // ============================================================
+        // ОТРИСОВКА МАРКЕРОВ
+        // ============================================================
         function renderMarkers() {
-            placemarks.forEach(p => map.geoObjects.remove(p));
+            // Удаляем старые метки
+            for (var i = 0; i < placemarks.length; i++) {
+                map.geoObjects.remove(placemarks[i]);
+            }
             placemarks = [];
+            
             if (allData.length === 0) return;
             
-            allData.forEach((item, index) => {
-                const color = STAGE_COLORS[item.stage_id] || STAGE_COLORS.default;
-                const stage = item.stage_id || 'Без стадии';
+            for (var i = 0; i < allData.length; i++) {
+                var item = allData[i];
+                var color = STAGE_COLORS[item.stage_id] || STAGE_COLORS.default;
+                var stage = item.stage_id || 'Без стадии';
                 
-                const placemark = new ymaps.Placemark(
+                var placemark = new ymaps.Placemark(
                     [item.lat, item.lon],
                     {
-                        id: index,
+                        id: i,
                         title: item.title || 'Без названия',
                         address: item.address_clean || item.address || '',
                         stage: stage,
-                        balloonContentHeader: `<b>${item.title || 'Без названия'}</b>`,
-                        balloonContentBody: `
-                            <div style="max-width: 260px; font-size: 13px;">
-                                <p><strong>📍 Адрес:</strong> ${item.address_clean || item.address || 'Не указан'}</p>
-                                <p><strong>📊 Стадия:</strong> ${stage}</p>
-                                <p><strong>📌 Координаты:</strong> ${item.lat}, ${item.lon}</p>
-                            </div>
-                        `
+                        balloonContentHeader: '<b>' + (item.title || 'Без названия') + '</b>',
+                        balloonContentBody: '<div style="max-width: 260px; font-size: 13px;">' +
+                            '<p><strong>📍 Адрес:</strong> ' + (item.address_clean || item.address || 'Не указан') + '</p>' +
+                            '<p><strong>📊 Стадия:</strong> ' + stage + '</p>' +
+                            '<p><strong>📌 Координаты:</strong> ' + item.lat + ', ' + item.lon + '</p>' +
+                            '</div>'
                     },
                     {
                         preset: 'islands#circleIcon',
@@ -215,90 +235,135 @@
                 
                 placemarks.push(placemark);
                 map.geoObjects.add(placemark);
-            });
+            }
             
+            // Центрируем карту на всех точках
             if (allData.length > 0) {
-                const bounds = map.geoObjects.getBounds();
-                if (bounds) map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+                var bounds = map.geoObjects.getBounds();
+                if (bounds) {
+                    map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+                }
             }
         }
         
+        // ============================================================
+        // ЛЕГЕНДА
+        // ============================================================
         function updateLegend() {
-            const stages = {};
-            allData.forEach(item => {
-                const stage = item.stage_id || 'Без стадии';
+            var stages = {};
+            for (var i = 0; i < allData.length; i++) {
+                var stage = allData[i].stage_id || 'Без стадии';
                 stages[stage] = (stages[stage] || 0) + 1;
+            }
+            
+            var legendHtml = '';
+            var stageKeys = Object.keys(stages);
+            stageKeys.sort(function(a, b) {
+                return stages[b] - stages[a];
             });
             
-            const legendHtml = Object.entries(stages)
-                .sort((a, b) => b[1] - a[1])
-                .map(([stage, count]) => `
-                    <div class="legend-item" onclick="filterByStage('${stage}')">
-                        <div class="legend-color" style="background: ${STAGE_COLORS[stage] || STAGE_COLORS.default};"></div>
-                        <span>${stage}</span>
-                        <span class="legend-count">${count}</span>
-                    </div>
-                `)
-                .join('');
+            for (var i = 0; i < stageKeys.length; i++) {
+                var stage = stageKeys[i];
+                var count = stages[stage];
+                var color = STAGE_COLORS[stage] || STAGE_COLORS.default;
+                legendHtml += '<div class="legend-item" onclick="filterByStage(\'' + stage + '\')">' +
+                    '<div class="legend-color" style="background: ' + color + ';"></div>' +
+                    '<span>' + stage + '</span>' +
+                    '<span class="legend-count">' + count + '</span>' +
+                    '</div>';
+            }
             
             document.getElementById('legendContent').innerHTML = legendHtml || 'Нет данных';
-            document.getElementById('legendStats').textContent = `Всего объектов: ${allData.length}`;
+            document.getElementById('legendStats').textContent = 'Всего объектов: ' + allData.length;
         }
         
+        // ============================================================
+        // ФИЛЬТРАЦИЯ ПО СТАДИИ
+        // ============================================================
         function filterByStage(stage) {
-            currentFilter = currentFilter === stage ? null : stage;
-            placemarks.forEach((p, index) => {
-                const item = allData[index];
-                p.options.set('visible', !currentFilter || item.stage_id === currentFilter);
-            });
+            if (currentFilter === stage) {
+                currentFilter = null;
+            } else {
+                currentFilter = stage;
+            }
             
-            document.querySelectorAll('.legend-item').forEach(el => {
-                el.style.background = el.textContent.trim() === stage && currentFilter ? '#e8f0fe' : 'transparent';
-            });
+            for (var i = 0; i < placemarks.length; i++) {
+                var item = allData[i];
+                var show = !currentFilter || item.stage_id === currentFilter;
+                placemarks[i].options.set('visible', show);
+            }
+            
+            // Подсвечиваем активный фильтр
+            var items = document.querySelectorAll('.legend-item');
+            for (var i = 0; i < items.length; i++) {
+                items[i].style.background = items[i].textContent.trim() === stage && currentFilter ? '#e8f0fe' : 'transparent';
+            }
         }
         
+        // ============================================================
+        // ПОИСК
+        // ============================================================
         function searchAddress() {
-            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            var query = document.getElementById('searchInput').value.trim().toLowerCase();
             if (!query) return;
             
-            let found = false;
-            placemarks.forEach((p, index) => {
-                const item = allData[index];
-                const match = (item.title?.toLowerCase().includes(query) || 
-                             item.address_clean?.toLowerCase().includes(query) ||
-                             item.address?.toLowerCase().includes(query));
+            var found = false;
+            
+            for (var i = 0; i < placemarks.length; i++) {
+                var item = allData[i];
+                var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1) || 
+                           (item.address_clean && item.address_clean.toLowerCase().indexOf(query) !== -1) ||
+                           (item.address && item.address.toLowerCase().indexOf(query) !== -1);
                 
                 if (match) {
-                    p.options.set('visible', true);
+                    placemarks[i].options.set('visible', true);
                     if (!found) {
-                        map.setCenter(p.geometry.getCoordinates(), 15);
-                        p.balloon.open();
+                        var coords = placemarks[i].geometry.getCoordinates();
+                        map.setCenter(coords, 15);
+                        placemarks[i].balloon.open();
                         found = true;
                     }
                 } else if (!currentFilter) {
-                    p.options.set('visible', false);
+                    placemarks[i].options.set('visible', false);
                 }
-            });
+            }
             
-            if (!found) { alert('🔍 Ничего не найдено'); clearSearch(); }
+            if (!found) {
+                alert('🔍 Ничего не найдено');
+                clearSearch();
+            }
         }
         
         function clearSearch() {
             document.getElementById('searchInput').value = '';
             currentFilter = null;
-            placemarks.forEach(p => p.options.set('visible', true));
-            document.querySelectorAll('.legend-item').forEach(el => el.style.background = 'transparent');
+            
+            for (var i = 0; i < placemarks.length; i++) {
+                placemarks[i].options.set('visible', true);
+            }
+            
+            var items = document.querySelectorAll('.legend-item');
+            for (var i = 0; i < items.length; i++) {
+                items[i].style.background = 'transparent';
+            }
+            
             if (allData.length > 0) {
-                const bounds = map.geoObjects.getBounds();
-                if (bounds) map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+                var bounds = map.geoObjects.getBounds();
+                if (bounds) {
+                    map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+                }
             }
         }
         
+        // Enter для поиска
         document.getElementById('searchInput').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') searchAddress();
         });
         
-        setInterval(() => loadData(), 5 * 60 * 1000);
+        // Автообновление каждые 5 минут
+        setInterval(function() {
+            loadData();
+        }, 5 * 60 * 1000);
     </script>
 </body>
 </html>
