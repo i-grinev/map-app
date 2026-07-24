@@ -71,25 +71,22 @@ def is_cache_valid(cached_entry, current_address):
     return True
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА
+# НОРМАЛИЗАЦИЯ АДРЕСА (УЛУЧШЕННАЯ)
 # ============================================================
 def normalize_address(address):
     """
-    Минимальная очистка адреса:
-    - Убираем звёздочки и решётки
-    - Убираем лишние переносы строк
-    - ВСЁ ОСТАЛЬНОЕ СОХРАНЯЕМ для геокодера
+    Улучшенная нормализация адреса с правильным определением города
     """
     if not address:
         return ''
     
     text = str(address).strip()
     
-    # 1. Убираем только мусорные символы
+    # 1. Убираем звёздочки и решётки
     text = text.replace('*', '').replace('#', '')
     text = text.replace('\n', ' ').replace('\r', ' ')
     
-    # 2. Убираем только явный мусор в скобках
+    # 2. Убираем мусор в скобках
     text = re.sub(r'\([^)]*\)', '', text)
     text = re.sub(r'\[[^\]]*\]', '', text)
     
@@ -99,11 +96,7 @@ def normalize_address(address):
     # 4. Убираем "г." в начале (НО сохраняем город!)
     text = re.sub(r'^\s*г\.\s*', '', text, flags=re.IGNORECASE)
     
-    # 5. Убираем ЖК, МЦД, МЦК, Метро (только если они отдельно)
-    text = re.sub(r'\b(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
-    
-    # 6. Заменяем ТОЛЬКО ОЧЕВИДНЫЕ сокращения
+    # 5. Заменяем сокращения
     replacements = {
         r'\bул\.\b': 'улица',
         r'\bпр-д\b': 'проезд',
@@ -120,15 +113,22 @@ def normalize_address(address):
         r'\bк\.\b': 'корпус',
         r'\bстр\.\b': 'строение',
         r'\bкорп\.\b': 'корпус',
+        r'\bс\.\b': 'село',
+        r'\bдер\.\b': 'деревня',
+        r'\bпгт\.\b': 'поселок городского типа',
     }
     
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
-    # 7. Формат "23к7" -> "23 корпус 7"
+    # 6. Формат "23к7" -> "23 корпус 7"
     text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
+    text = re.sub(r'(\d+)к([А-Я])', r'\1 корпус \2', text, flags=re.IGNORECASE)
     
-    # 8. Убираем ТОЛЬКО явные пояснения в КОНЦЕ (не трогаем корпуса!)
+    # 7. Формат "дом 23к7" -> "дом 23 корпус 7"
+    text = re.sub(r'дом\s*(\d+)к(\d+)', r'дом \1 корпус \2', text, flags=re.IGNORECASE)
+    
+    # 8. Убираем пояснения в конце
     text = re.sub(r',?\s*код\s*домофона[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*домофон[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*ключ[\s\S]*$', '', text, flags=re.IGNORECASE)
@@ -146,10 +146,91 @@ def normalize_address(address):
     if len(text) < 5:
         return text
     
-    # 10. Добавляем "Москва" только если нет города
-    cities_pattern = r'(Москва|Санкт-Петербург|Краснодар|Ялта|Сочи|Казань|Екатеринбург|Новосибирск|Мытищи|Видное|Люберцы|Химки|Долгопрудный|Ступино|Котельники|Красногорск|область|край|республика|район|поселок|деревня|село|город)'
-    if not re.search(cities_pattern, text, re.IGNORECASE):
-        text = 'Москва, ' + text
+    # ============================================================
+    # УЛУЧШЕННОЕ ОПРЕДЕЛЕНИЕ ГОРОДА
+    # ============================================================
+    
+    # Проверяем наличие города в адресе
+    city_found = False
+    detected_city = None
+    
+    # Список городов с паттернами
+    cities = {
+        'Москва': r'(Москва|г\.?\s*Москва|город\s*Москва)',
+        'Санкт-Петербург': r'(Санкт-Петербург|СПб|г\.?\s*Санкт-Петербург|город\s*Санкт-Петербург)',
+        'Краснодар': r'(Краснодар|г\.?\s*Краснодар|город\s*Краснодар)',
+        'Сочи': r'(Сочи|г\.?\s*Сочи|город\s*Сочи)',
+        'Ялта': r'(Ялта|г\.?\s*Ялта|город\s*Ялта)',
+        'Казань': r'(Казань|г\.?\s*Казань|город\s*Казань)',
+        'Екатеринбург': r'(Екатеринбург|г\.?\s*Екатеринбург|город\s*Екатеринбург)',
+        'Новосибирск': r'(Новосибирск|г\.?\s*Новосибирск|город\s*Новосибирск)',
+        'Красногорск': r'(Красногорск|г\.?\s*Красногорск|город\s*Красногорск)',
+        'Мытищи': r'(Мытищи|г\.?\s*Мытищи|город\s*Мытищи)',
+        'Видное': r'(Видное|г\.?\s*Видное|город\s*Видное)',
+        'Люберцы': r'(Люберцы|г\.?\s*Люберцы|город\s*Люберцы)',
+        'Долгопрудный': r'(Долгопрудный|г\.?\s*Долгопрудный|город\s*Долгопрудный)',
+        'Химки': r'(Химки|г\.?\s*Химки|город\s*Химки)',
+        'Котельники': r'(Котельники|г\.?\s*Котельники|город\s*Котельники)',
+        'Ступино': r'(Ступино|г\.?\s*Ступино|город\s*Ступино)',
+        'Дубна': r'(Дубна|г\.?\s*Дубна|город\s*Дубна)',
+        'Королев': r'(Королев|г\.?\s*Королев|город\s*Королев)',
+        'Балашиха': r'(Балашиха|г\.?\s*Балашиха|город\s*Балашиха)',
+        'Подольск': r'(Подольск|г\.?\s*Подольск|город\s*Подольск)',
+        'Одинцово': r'(Одинцово|г\.?\s*Одинцово|город\s*Одинцово)',
+        'Реутов': r'(Реутов|г\.?\s*Реутов|город\s*Реутов)',
+    }
+    
+    # Ищем город
+    for city, pattern in cities.items():
+        if re.search(pattern, text, re.IGNORECASE):
+            city_found = True
+            detected_city = city
+            break
+    
+    # Специальная обработка для сокращенных адресов Краснодара
+    if not city_found:
+        # "Краснодар ГД2к1" -> "г Краснодар, ул. им. Героя Дангирева, д. 2, корп. 1"
+        if re.search(r'Краснодар\s+ГД(\d+)к(\d+)', text, re.IGNORECASE):
+            text = re.sub(r'Краснодар\s+ГД(\d+)к(\d+)', r'г Краснодар, ул. им. Героя Дангирева, д. \1, корп. \2', text)
+            city_found = True
+            detected_city = 'Краснодар'
+        
+        # "Краснодар ИБ88к3Кв39" -> "г Краснодар, ул. им. Ивана Беленко, д. 88, корп. 3, кв. 39"
+        elif re.search(r'Краснодар\s+ИБ(\d+)к(\d+)Кв(\d+)', text, re.IGNORECASE):
+            text = re.sub(r'Краснодар\s+ИБ(\d+)к(\d+)Кв(\d+)', r'г Краснодар, ул. им. Ивана Беленко, д. \1, корп. \2, кв. \3', text)
+            city_found = True
+            detected_city = 'Краснодар'
+        
+        # "Краснодар ГД2к1 Кв73" -> "г Краснодар, ул. им. Героя Дангирева, д. 2, корп. 1, кв. 73"
+        elif re.search(r'Краснодар\s+ГД(\d+)к(\d+)\s+Кв(\d+)', text, re.IGNORECASE):
+            text = re.sub(r'Краснодар\s+ГД(\d+)к(\d+)\s+Кв(\d+)', r'г Краснодар, ул. им. Героя Дангирева, д. \1, корп. \2, кв. \3', text)
+            city_found = True
+            detected_city = 'Краснодар'
+    
+    # Если город не найден - добавляем Москву (только если нет других признаков)
+    if not city_found:
+        # Проверяем, есть ли признаки региона (не Москва)
+        region_patterns = [
+            r'область', r'край', r'республика', 
+            r'поселок', r'деревня', r'село',
+            r'пос\.', r'дер\.', r'с\.',
+            r'Тахтамукайский', r'Дагестан', r'Краснодарский'
+        ]
+        is_region = any(re.search(pattern, text, re.IGNORECASE) for pattern in region_patterns)
+        
+        # Также проверяем города в тексте
+        city_patterns = [
+            r'Краснодар', r'Сочи', r'Ялта', r'Казань',
+            r'Санкт-Петербург', r'СПб', r'Екатеринбург'
+        ]
+        has_city_in_text = any(re.search(pattern, text, re.IGNORECASE) for pattern in city_patterns)
+        
+        if not is_region and not has_city_in_text:
+            text = 'г Москва, ' + text
+    
+    # Если город найден, но нет "г" в начале - добавляем
+    elif detected_city and not re.search(r'г\.?\s*' + detected_city, text, re.IGNORECASE):
+        text = re.sub(detected_city, f'г {detected_city}', text, flags=re.IGNORECASE)
     
     return text
 
@@ -179,9 +260,31 @@ def geocode_yandex(address):
                 pos = members[0]['GeoObject']['Point']['pos']
                 lon, lat = pos.split(' ')
                 lat, lon = float(lat), float(lon)
+                
+                # Проверяем регион для Краснодара
+                try:
+                    address_parts = members[0]['GeoObject']['metaDataProperty']['GeocoderMetaData']['Address']['Components']
+                    region = None
+                    for part in address_parts:
+                        if part['kind'] == 'region':
+                            region = part['name']
+                            break
+                    
+                    # Если в адресе Краснодар, а координаты не в Краснодарском крае - ошибка
+                    if 'Краснодар' in address and region and 'Краснодарский' not in region:
+                        print(f"   ⚠️ Ошибка: адрес из Краснодара, а координаты в {region} (lat={lat}, lon={lon})")
+                        return None
+                except:
+                    pass
+                
                 # Проверяем, что координаты не в центре Москвы (костыль)
-                if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
-                    return {'lat': lat, 'lon': lon}
+                if abs(lat - 55.7558) < 0.01 and abs(lon - 37.6173) < 0.01:
+                    # Если адрес не Москва, а координаты в центре Москвы - ошибка
+                    if 'Москва' not in address:
+                        print(f"   ⚠️ Ошибка: адрес не из Москвы, а координаты в центре Москвы")
+                        return None
+                
+                return {'lat': lat, 'lon': lon}
         return None
     except Exception as e:
         return None
@@ -206,9 +309,13 @@ def geocode_osm(address):
         if response.status_code == 200 and response.json():
             data = response.json()[0]
             lat, lon = float(data['lat']), float(data['lon'])
+            
             # Проверяем, что координаты не в центре Москвы (костыль)
-            if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
-                return {'lat': lat, 'lon': lon}
+            if abs(lat - 55.7558) < 0.01 and abs(lon - 37.6173) < 0.01:
+                if 'Москва' not in address:
+                    return None
+            
+            return {'lat': lat, 'lon': lon}
         return None
     except Exception as e:
         return None
@@ -385,11 +492,43 @@ def print_statistics(results, geocoded, from_cache, total):
         if r.get('lat'):
             stages[stage]['geocoded'] += 1
     
-    print("\n   📋 По стадиям:")
+    print("\n   📋 По стадиям (топ-10):")
     for stage, data in sorted(stages.items(), key=lambda x: x[1]['total'], reverse=True)[:10]:
-        stage_name = data['total']
+        stage_short = stage.split(':')[-1] if ':' in stage else stage
         geocoded_count = data['geocoded']
-        print(f"      {stage}: {geocoded_count}/{data['total']} ({geocoded_count/data['total']*100:.1f}%)")
+        print(f"      {stage_short}: {geocoded_count}/{data['total']} ({geocoded_count/data['total']*100:.1f}%)")
+    
+    # Статистика по городам
+    cities = {}
+    for r in results:
+        addr = r.get('address_clean', '')
+        city = 'unknown'
+        if 'Краснодар' in addr:
+            city = 'Краснодар'
+        elif 'Санкт-Петербург' in addr or 'СПб' in addr:
+            city = 'Санкт-Петербург'
+        elif 'Москва' in addr:
+            city = 'Москва'
+        elif 'Сочи' in addr:
+            city = 'Сочи'
+        elif 'Ялта' in addr:
+            city = 'Ялта'
+        else:
+            # Пытаемся определить город
+            for c in ['Екатеринбург', 'Новосибирск', 'Казань', 'Красногорск', 'Мытищи', 'Видное', 'Люберцы', 'Химки']:
+                if c in addr:
+                    city = c
+                    break
+        
+        if city not in cities:
+            cities[city] = {'total': 0, 'geocoded': 0}
+        cities[city]['total'] += 1
+        if r.get('lat'):
+            cities[city]['geocoded'] += 1
+    
+    print("\n   📍 По городам:")
+    for city, data in sorted(cities.items(), key=lambda x: x[1]['total'], reverse=True):
+        print(f"      {city}: {data['geocoded']}/{data['total']} ({data['geocoded']/data['total']*100:.1f}%)")
 
 # ============================================================
 # ОСНОВНАЯ ФУНКЦИЯ
