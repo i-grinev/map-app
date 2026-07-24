@@ -37,6 +37,7 @@ def load_cache():
         return {}
 
 def save_cache(cache):
+    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
@@ -60,28 +61,38 @@ def should_ignore(stage_id):
     return stage in IGNORE_STAGES
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА
+# НОРМАЛИЗАЦИЯ АДРЕСА (исправленная версия)
 # ============================================================
 def normalize_address(address):
     if not address:
         return ''
     
     text = str(address).strip()
-    text = text.replace('*', '').replace('#', '')
-    text = text.replace('\n', ' ').replace('\r', ' ')
-    text = re.sub(r'\([^)]*\)', '', text)
-    text = re.sub(r'\[[^\]]*\]', '', text)
-    text = re.sub(r'^г\.\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
     
+    # Удаляем звездочки и решетки
+    text = text.replace('*', '').replace('#', '')
+    
+    # Заменяем переносы строк на пробелы
+    text = text.replace('\n', ' ').replace('\r', ' ')
+    
+    # Удаляем лишние комментарии в скобках, но сохраняем важную информацию
+    # Например: (МЦК Стрешнево) - это важно для геокодирования
+    text = re.sub(r'\([^)]*МЦ[^)]*\)', '', text)  # Удаляем только если есть МЦК/МЦД
+    text = re.sub(r'\([^)]*метро[^)]*\)', '', text, flags=re.IGNORECASE)
+    
+    # Удаляем только явные лишние части
+    text = re.sub(r',?\s*код домофона[\s\S]*?(?=,|$)', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*домофон[\s\S]*?(?=,|$)', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*ключ[\s\S]*?(?=,|$)', '', text, flags=re.IGNORECASE)
+    text = re.sub(r',?\s*парковка[\s\S]*?(?=,|$)', '', text, flags=re.IGNORECASE)
+    
+    # Преобразуем сокращения (сохраняя структуру адреса)
     replacements = {
         r'\bул\.\b': 'улица',
         r'\bпр-д\b': 'проезд',
         r'\bпр-кт\b': 'проспект',
         r'\bпр-т\b': 'проспект',
-        r'\bпр\.\b': 'проезд',
+        r'\bпр\.\b': 'проспект',  # Важно: проспект, а не проезд!
         r'\bпер\.\b': 'переулок',
         r'\bш\.\b': 'шоссе',
         r'\bнаб\.\b': 'набережная',
@@ -92,57 +103,51 @@ def normalize_address(address):
         r'\bк\.\b': 'корпус',
         r'\bстр\.\b': 'строение',
         r'\bкорп\.\b': 'корпус',
+        r'\bг\.\b': 'город',
     }
     
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
+    # Обработка форматов типа "д. 23к7" или "23к7"
     text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
+    text = re.sub(r'дом\s*(\d+)\s*к(\d+)', r'дом \1 корпус \2', text, flags=re.IGNORECASE)
     
+    # Удаляем только ОЧЕВИДНО лишние детали (квартиры, этажи, подъезды)
+    # НО сохраняем номер дома, корпус, строение
     patterns_to_remove = [
-        r'подъезд\s*\d+[А-Яа-яёЁ]?',
-        r'под\.?\s*\d+[А-Яа-яёЁ]?',
-        r'п\.\s*\d+[А-Яа-яёЁ]?',
-        r'этаж\s*\d+[А-Яа-яёЁ]?',
-        r'эт\.?\s*\d+[А-Яа-яёЁ]?',
-        r'эт\s*\d+[А-Яа-яёЁ]?',
-        r'кв\.\s*[\d/А-Яа-яёЁ]+',
-        r'квартира\s*[\d/А-Яа-яёЁ]+',
-        r'апарт\.?\s*[\d/А-Яа-яёЁ]+',
-        r'апартаменты\s*[\d/А-Яа-яёЁ]+',
-        r'пом\.\s*[\d/А-Яа-яёЁ]+',
-        r'помещение\s*[\d/А-Яа-яёЁ]+',
-        r'студия\s*[\d/А-Яа-яёЁ]+',
-        r'ком\.\s*[\d/А-Яа-яёЁ]+',
-        r'комната\s*[\d/А-Яа-яёЁ]+',
-        r'секция\s*\d+',
-        r'парадная\s*\d+',
+        (r',?\s*кв\.\s*[\d/А-Яа-яёЁ]+', ''),  # квартира
+        (r',?\s*квартира\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*апарт\.?\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*апартаменты\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*пом\.\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*помещение\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*студия\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*ком\.\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*комната\s*[\d/А-Яа-яёЁ]+', ''),
+        (r',?\s*этаж\s*\d+[А-Яа-яёЁ]?', ''),
+        (r',?\s*эт\.?\s*\d+[А-Яа-яёЁ]?', ''),
+        (r',?\s*эт\s*\d+[А-Яа-яёЁ]?', ''),
+        (r',?\s*подъезд\s*\d+[А-Яа-яёЁ]?', ''),
+        (r',?\s*под\.?\s*\d+[А-Яа-яёЁ]?', ''),
+        (r',?\s*п\.\s*\d+[А-Яа-яёЁ]?', ''),
+        (r',?\s*секция\s*\d+', ''),
+        (r',?\s*парадная\s*\d+', ''),
+        (r',?\s*на первом уровне секции', ''),
+        (r',?\s*на втором уровне секции', ''),
     ]
     
-    for pattern in patterns_to_remove:
-        text = re.sub(r',?\s*' + pattern, '', text, flags=re.IGNORECASE)
+    for pattern, replacement in patterns_to_remove:
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
-    text = re.sub(r',?\s*код\s*домофона[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*домофон[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*ключ[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*дверь[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*вход[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*парковка[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*Wi-Fi[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*Важно[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*обязательно[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*геолокация[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*со стороны[\s\S]*$', '', text, flags=re.IGNORECASE)
-    
-    text = re.sub(r',+', ',', text)
+    # Убираем лишние запятые и пробелы
+    text = re.sub(r',\s*,', ',', text)
     text = re.sub(r'\s+', ' ', text)
     text = text.strip().rstrip(',').rstrip('.')
     
+    # Если адрес слишком короткий, пытаемся восстановить его
     if len(text) < 5:
         return text
-    
-    if not re.search(r'(Москва|Санкт-Петербург|Краснодар|Ялта|Сочи|Казань|Екатеринбург|Новосибирск|Мытищи|Видное|Люберцы|Химки|Долгопрудный|Ступино|Котельники|Красногорск|область|край|республика|район|поселок|деревня|село|город)', text, re.IGNORECASE):
-        text = 'Москва, ' + text
     
     return text
 
@@ -173,9 +178,25 @@ def geocode_address(address, cache):
         save_cache(cache)
         return coords
     
+    # Если не нашли по полному адресу, пробуем упрощенный вариант
+    simplified = simplify_address(address)
+    if simplified and simplified != address:
+        coords = geocode_yandex(simplified) if YANDEX_API_KEY else geocode_osm(simplified)
+        if coords:
+            cache[cache_key] = coords
+            save_cache(cache)
+            return coords
+    
     cache[cache_key] = None
     save_cache(cache)
     return None
+
+def simplify_address(address):
+    """Упрощает адрес для поиска (убирает корпуса если не найдено)"""
+    # Убираем корпус если есть
+    simplified = re.sub(r',?\s*корпус\s*\d+', '', address, flags=re.IGNORECASE)
+    simplified = re.sub(r',?\s*строение\s*\d+', '', simplified, flags=re.IGNORECASE)
+    return simplified.strip()
 
 def geocode_yandex(address):
     if not YANDEX_API_KEY:
@@ -199,10 +220,10 @@ def geocode_yandex(address):
                 pos = members[0]['GeoObject']['Point']['pos']
                 lon, lat = pos.split(' ')
                 lat, lon = float(lat), float(lon)
-                if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
-                    return {'lat': lat, 'lon': lon}
+                return {'lat': lat, 'lon': lon}
         return None
-    except:
+    except Exception as e:
+        print(f"   Yandex error: {e}")
         return None
 
 def geocode_osm(address):
@@ -224,10 +245,10 @@ def geocode_osm(address):
         if response.status_code == 200 and response.json():
             data = response.json()[0]
             lat, lon = float(data['lat']), float(data['lon'])
-            if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
-                return {'lat': lat, 'lon': lon}
+            return {'lat': lat, 'lon': lon}
         return None
-    except:
+    except Exception as e:
+        print(f"   OSM error: {e}")
         return None
 
 # ============================================================
@@ -252,6 +273,11 @@ def process_item(item, cache):
     
     address = item.get(ADDRESS_FIELD, '')
     clean = normalize_address(address) if address else ''
+    
+    # Если адрес очищен слишком сильно, пробуем использовать оригинал
+    if clean and len(clean) < 10:
+        clean = address
+    
     coords = geocode_address(clean, cache) if clean else None
     
     return {
@@ -354,6 +380,7 @@ def main():
     print(f"   Яндекс ключ: {'✅ Есть' if YANDEX_API_KEY else '❌ Нет'}")
     print(f"   Игнорируем стадии: {IGNORE_STAGES}")
     
+    os.makedirs('data', exist_ok=True)
     cache = load_cache()
     print(f"   Кэш: {len(cache)} записей")
     
@@ -371,8 +398,7 @@ def main():
     print(f"📍 Геокодирование...")
     results, geocoded, ignored = process_parallel(items_to_process, cache)
     
-    # Добавляем игнорируемые объекты в результат (для статистики)
-    # Они уже не будут на карте, но мы сохраним их в JSON с пометкой
+    # Добавляем игнорируемые объекты в результат
     ignored_results = []
     for item in items:
         if should_ignore(item.get('stageId', '')):
