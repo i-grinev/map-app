@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📍 Карта объектов</title>
     
-    <!-- Яндекс.Карты с вашим новым ключом -->
-    <script src="https://api-maps.yandex.ru/2.0/?apikey=7a1fafe9-84a4-4870-b4bd-951a447bb77c&lang=ru-RU" type="text/javascript"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -42,26 +42,24 @@
         .stats { font-size: 12px; color: #5f6368; padding: 4px 8px; background: #f1f3f4; border-radius: 4px; white-space: nowrap; }
         #map { height: calc(100vh - 65px); width: 100%; }
         
-        .legend {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: white;
-            padding: 10px 14px;
+        /* Стили для попапа */
+        .custom-popup .leaflet-popup-content-wrapper {
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-            z-index: 1000;
-            max-height: 200px;
-            overflow-y: auto;
-            min-width: 120px;
-            font-size: 12px;
         }
-        .legend h4 { margin-bottom: 6px; color: #202124; font-size: 13px; }
-        .legend-item { display: flex; align-items: center; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
-        .legend-item:hover { background: #f1f3f4; }
-        .legend-color { width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }
-        .legend-count { margin-left: auto; color: #5f6368; font-size: 11px; padding-left: 8px; }
-        .legend-stats { margin-top: 6px; padding-top: 6px; border-top: 1px solid #e8eaed; font-size: 11px; color: #5f6368; }
+        .custom-popup .leaflet-popup-content {
+            font-size: 13px;
+            min-width: 150px;
+        }
+        .custom-popup .leaflet-popup-content b {
+            color: #1a73e8;
+            font-size: 14px;
+        }
+        .custom-popup .leaflet-popup-content .address {
+            color: #5f6368;
+            font-size: 12px;
+            margin-top: 2px;
+        }
         
         .loading-overlay {
             position: fixed;
@@ -91,11 +89,43 @@
             z-index: 1000;
         }
         
+        /* Кнопки переключения слоёв */
+        .layer-control {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            z-index: 1000;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .layer-control button {
+            padding: 4px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .layer-control button:hover {
+            background: #f0f0f0;
+        }
+        .layer-control button.active {
+            background: #1a73e8;
+            color: white;
+            border-color: #1a73e8;
+        }
+        
         @media (max-width: 768px) {
             .header { flex-direction: column; align-items: stretch; gap: 6px; }
             .controls { justify-content: stretch; }
             .controls input { min-width: unset; width: 100%; }
-            .legend { bottom: 10px; right: 10px; left: 10px; max-height: 130px; }
+            .layer-control { bottom: 10px; right: 10px; left: 10px; justify-content: center; }
         }
     </style>
 </head>
@@ -111,7 +141,7 @@
     <div class="header">
         <h1>📍 Карта объектов <span class="badge" id="updateBadge">загрузка...</span></h1>
         <div class="controls">
-            <input type="text" id="searchInput" placeholder="🔍 Поиск..." />
+            <input type="text" id="searchInput" placeholder="🔍 Поиск по названию..." />
             <button class="btn btn-primary" onclick="searchAddress()">Найти</button>
             <button class="btn btn-warning" onclick="clearSearch()">✕</button>
             <button class="btn btn-success" onclick="loadData()">🔄</button>
@@ -121,55 +151,32 @@
     
     <div id="map"></div>
     
-    <div class="legend" id="legend">
-        <h4>📊 Стадии</h4>
-        <div id="legendContent"></div>
-        <div class="legend-stats" id="legendStats"></div>
-    </div>
-    
     <div class="updated-at" id="updatedAt"></div>
     
-    <script>
-    // ============================================================
-    // КОНФИГУРАЦИЯ
-    // ============================================================
-    var STAGE_COLORS = {
-        'UC_WXDLF4': '#FF6B6B',
-        'UC_QA1YNG': '#4ECDC4',
-        'SUCCESS': '#45B7D1',
-        'NEW': '#96CEB4',
-        'UC_0GI6RE': '#FFEAA7',
-        'default': '#A8A8A8'
-    };
+    <!-- Кнопки переключения слоёв -->
+    <div class="layer-control" id="layerControl">
+        <button class="active" data-layer="osm">🗺️ Схема</button>
+        <button data-layer="satellite">🛰️ Спутник</button>
+        <button data-layer="hybrid">🌍 Гибрид</button>
+    </div>
     
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
     // ============================================================
     // ПЕРЕМЕННЫЕ
     // ============================================================
     var map = null;
-    var placemarks = [];
+    var markerLayer = null;
     var allData = [];
-    var currentFilter = null;
-    var mapReady = false;
-    
-    // ============================================================
-    // ИНИЦИАЛИЗАЦИЯ КАРТЫ (Яндекс.Карты)
-    // ============================================================
-    ymaps.ready(function() {
-        map = new ymaps.Map('map', {
-            center: [55.76, 37.64],
-            zoom: 11,
-            controls: ['zoomControl', 'fullscreenControl']
-        });
-        mapReady = true;
-        loadData();
-    });
+    var tileLayers = {};
+    var currentLayer = null;
     
     // ============================================================
     // ЗАГРУЗКА ДАННЫХ
     // ============================================================
     function loadData() {
-        if (!mapReady) return;
-        
         document.getElementById('loading').classList.remove('hidden');
         document.getElementById('stats').textContent = '⏳...';
         
@@ -189,7 +196,6 @@
                 document.getElementById('updatedAt').textContent = '🔄 ' + new Date(data.updated_at).toLocaleString('ru-RU');
                 
                 renderMarkers();
-                updateLegend();
             })
             .catch(function(error) {
                 document.getElementById('loading').classList.add('hidden');
@@ -203,105 +209,52 @@
     // ОТРИСОВКА МАРКЕРОВ
     // ============================================================
     function renderMarkers() {
-        // Удаляем старые метки
-        for (var i = 0; i < placemarks.length; i++) {
-            map.geoObjects.remove(placemarks[i]);
-        }
-        placemarks = [];
-        
+        if (!markerLayer) return;
+        markerLayer.clearLayers();
         if (allData.length === 0) return;
         
         for (var i = 0; i < allData.length; i++) {
             var item = allData[i];
-            var color = STAGE_COLORS[item.stage_id] || STAGE_COLORS.default;
-            var stage = item.stage_id || 'Без стадии';
             
-            var placemark = new ymaps.Placemark(
-                [item.lat, item.lon],
-                {
-                    id: i,
-                    title: item.title || 'Без названия',
-                    address: item.address_clean || item.address || '',
-                    stage: stage,
-                    balloonContentHeader: '<b>' + (item.title || 'Без названия') + '</b>',
-                    balloonContentBody: '<div style="max-width: 260px; font-size: 13px;">' +
-                        '<p><strong>📍 Адрес:</strong> ' + (item.address_clean || item.address || 'Не указан') + '</p>' +
-                        '<p><strong>📊 Стадия:</strong> ' + stage + '</p>' +
-                        '<p><strong>📌 Координаты:</strong> ' + item.lat + ', ' + item.lon + '</p>' +
-                        '</div>'
-                },
-                {
-                    preset: 'islands#circleIcon',
-                    iconColor: color,
-                    draggable: false,
-                    openBalloonOnClick: true
-                }
-            );
+            // Простой маркер с номером
+            var iconHtml = '<div style="' +
+                'background: #1a73e8;' +
+                'width: 28px; height: 28px;' +
+                'border-radius: 50%;' +
+                'border: 3px solid white;' +
+                'box-shadow: 0 2px 6px rgba(0,0,0,0.3);' +
+                'display: flex; align-items: center; justify-content: center;' +
+                'font-size: 11px; color: white; font-weight: bold;' +
+                '">' + (i + 1) + '</div>';
             
-            placemarks.push(placemark);
-            map.geoObjects.add(placemark);
-        }
-        
-        // Центрируем карту на всех точках
-        if (allData.length > 0) {
-            var bounds = map.geoObjects.getBounds();
-            if (bounds) {
-                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
-            }
-        }
-    }
-    
-    // ============================================================
-    // ЛЕГЕНДА
-    // ============================================================
-    function updateLegend() {
-        var stages = {};
-        for (var i = 0; i < allData.length; i++) {
-            var stage = allData[i].stage_id || 'Без стадии';
-            stages[stage] = (stages[stage] || 0) + 1;
-        }
-        
-        var legendHtml = '';
-        var stageKeys = Object.keys(stages);
-        stageKeys.sort(function(a, b) {
-            return stages[b] - stages[a];
-        });
-        
-        for (var i = 0; i < stageKeys.length; i++) {
-            var stage = stageKeys[i];
-            var count = stages[stage];
-            var color = STAGE_COLORS[stage] || STAGE_COLORS.default;
-            legendHtml += '<div class="legend-item" onclick="filterByStage(\'' + stage + '\')">' +
-                '<div class="legend-color" style="background: ' + color + ';"></div>' +
-                '<span>' + stage + '</span>' +
-                '<span class="legend-count">' + count + '</span>' +
+            var icon = L.divIcon({
+                html: iconHtml,
+                className: '',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+            
+            var marker = L.marker([item.lat, item.lon], { icon: icon });
+            
+            // Попап с названием и адресом
+            var popupContent = '<div style="min-width: 150px;">' +
+                '<b>' + (item.title || 'Без названия') + '</b>' +
+                '<div class="address">' + (item.address_clean || item.address || '') + '</div>' +
                 '</div>';
+            
+            marker.bindPopup(popupContent, { 
+                maxWidth: 300,
+                className: 'custom-popup'
+            });
+            marker._index = i;
+            markerLayer.addLayer(marker);
         }
         
-        document.getElementById('legendContent').innerHTML = legendHtml || 'Нет данных';
-        document.getElementById('legendStats').textContent = 'Всего объектов: ' + allData.length;
-    }
-    
-    // ============================================================
-    // ФИЛЬТРАЦИЯ ПО СТАДИИ
-    // ============================================================
-    function filterByStage(stage) {
-        if (currentFilter === stage) {
-            currentFilter = null;
-        } else {
-            currentFilter = stage;
-        }
-        
-        for (var i = 0; i < placemarks.length; i++) {
-            var item = allData[i];
-            var show = !currentFilter || item.stage_id === currentFilter;
-            placemarks[i].options.set('visible', show);
-        }
-        
-        // Подсвечиваем активный фильтр
-        var items = document.querySelectorAll('.legend-item');
-        for (var i = 0; i < items.length; i++) {
-            items[i].style.background = items[i].textContent.trim() === stage && currentFilter ? '#e8f0fe' : 'transparent';
+        if (allData.length > 0) {
+            var bounds = markerLayer.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+            }
         }
     }
     
@@ -313,25 +266,25 @@
         if (!query) return;
         
         var found = false;
-        
-        for (var i = 0; i < placemarks.length; i++) {
-            var item = allData[i];
-            var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1) || 
-                       (item.address_clean && item.address_clean.toLowerCase().indexOf(query) !== -1) ||
-                       (item.address && item.address.toLowerCase().indexOf(query) !== -1);
-            
-            if (match) {
-                placemarks[i].options.set('visible', true);
-                if (!found) {
-                    var coords = placemarks[i].geometry.getCoordinates();
-                    map.setCenter(coords, 15);
-                    placemarks[i].balloon.open();
-                    found = true;
+        markerLayer.eachLayer(function(marker) {
+            var item = allData[marker._index];
+            if (item) {
+                var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1) || 
+                           (item.address_clean && item.address_clean.toLowerCase().indexOf(query) !== -1) ||
+                           (item.address && item.address.toLowerCase().indexOf(query) !== -1);
+                
+                if (match) {
+                    markerLayer.addLayer(marker);
+                    if (!found) {
+                        map.setView(marker.getLatLng(), 15);
+                        marker.openPopup();
+                        found = true;
+                    }
+                } else {
+                    markerLayer.removeLayer(marker);
                 }
-            } else if (!currentFilter) {
-                placemarks[i].options.set('visible', false);
             }
-        }
+        });
         
         if (!found) {
             alert('🔍 Ничего не найдено');
@@ -341,21 +294,69 @@
     
     function clearSearch() {
         document.getElementById('searchInput').value = '';
-        currentFilter = null;
         
-        for (var i = 0; i < placemarks.length; i++) {
-            placemarks[i].options.set('visible', true);
-        }
-        
-        var items = document.querySelectorAll('.legend-item');
-        for (var i = 0; i < items.length; i++) {
-            items[i].style.background = 'transparent';
+        for (var i = 0; i < allData.length; i++) {
+            markerLayer.eachLayer(function(marker) {
+                if (marker._index === i) {
+                    markerLayer.addLayer(marker);
+                }
+            });
         }
         
         if (allData.length > 0) {
-            var bounds = map.geoObjects.getBounds();
-            if (bounds) {
-                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+            var bounds = markerLayer.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+    }
+    
+    // ============================================================
+    // ПЕРЕКЛЮЧЕНИЕ СЛОЁВ КАРТЫ
+    // ============================================================
+    function setupTileLayers() {
+        // Схема (OpenStreetMap)
+        tileLayers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19
+        });
+        
+        // Спутник (ESRI)
+        tileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; <a href="https://www.esri.com">ESRI</a>',
+            maxZoom: 19
+        });
+        
+        // Гибрид (спутник + подписи)
+        tileLayers.hybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            attribution: '&copy; <a href="https://www.google.com/maps">Google</a>',
+            maxZoom: 19,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        });
+        
+        // Добавляем слой по умолчанию
+        currentLayer = tileLayers.osm;
+        currentLayer.addTo(map);
+    }
+    
+    function switchLayer(layerName) {
+        if (!tileLayers[layerName]) return;
+        
+        // Убираем текущий слой
+        if (currentLayer) {
+            map.removeLayer(currentLayer);
+        }
+        
+        // Добавляем новый
+        currentLayer = tileLayers[layerName];
+        currentLayer.addTo(map);
+        
+        // Обновляем активную кнопку
+        var buttons = document.querySelectorAll('#layerControl button');
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].classList.remove('active');
+            if (buttons[i].dataset.layer === layerName) {
+                buttons[i].classList.add('active');
             }
         }
     }
@@ -367,10 +368,36 @@
         if (e.key === 'Enter') searchAddress();
     });
     
+    document.querySelectorAll('#layerControl button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            switchLayer(this.dataset.layer);
+        });
+    });
+    
     // Автообновление каждые 5 минут
     setInterval(function() {
         loadData();
     }, 5 * 60 * 1000);
+    
+    // ============================================================
+    // ЗАПУСК КАРТЫ
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        map = L.map('map', {
+            center: [55.76, 37.64],
+            zoom: 11,
+            zoomControl: false
+        });
+        
+        L.control.zoom({ position: 'topleft' }).addTo(map);
+        
+        // Настраиваем слои
+        setupTileLayers();
+        
+        // Создаём слой для маркеров
+        markerLayer = L.layerGroup().addTo(map);
+        loadData();
+    });
     </script>
 </body>
 </html>
