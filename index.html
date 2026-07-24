@@ -6,6 +6,8 @@
     <title>Карта объектов</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -95,22 +97,21 @@
         .layer-control button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
         
         /* ============================================================
-           СТИЛИ ДЛЯ МАРКЕРОВ С НАЗВАНИЯМИ
+           СТИЛИ ДЛЯ КАСТОМНЫХ МАРКЕРОВ
            ============================================================ */
         
-        /* Контейнер метки: точка + текст на фоне */
-        .marker-container {
+        .custom-marker {
             display: flex;
             align-items: center;
             gap: 4px;
             cursor: pointer;
             transition: transform 0.15s;
+            position: relative;
         }
-        .marker-container:hover {
+        .custom-marker:hover {
             transform: scale(1.05);
         }
         
-        /* Точка */
         .marker-dot {
             width: 10px;
             height: 10px;
@@ -119,9 +120,9 @@
             border: 2px solid white;
             box-shadow: 0 1px 4px rgba(0,0,0,0.3);
             flex-shrink: 0;
+            transition: all 0.2s;
         }
         
-        /* Текст с фоном */
         .marker-label {
             background: rgba(26, 115, 232, 0.88);
             color: white;
@@ -137,43 +138,129 @@
             pointer-events: none;
         }
         
-        /* Тултип при наведении (адрес) */
-        .marker-tooltip {
+        .custom-marker:hover .marker-label {
+            background: rgba(26, 115, 232, 1);
+            box-shadow: 0 2px 8px rgba(26,115,232,0.4);
+        }
+        
+        /* Тултип со списком объектов при наведении */
+        .marker-tooltip-list {
             display: none;
             position: absolute;
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.85);
+            background: rgba(0,0,0,0.9);
             color: white;
-            padding: 4px 12px;
-            border-radius: 6px;
+            padding: 8px 12px;
+            border-radius: 8px;
             font-size: 11px;
-            white-space: nowrap;
+            min-width: 150px;
             max-width: 300px;
-            overflow: hidden;
-            text-overflow: ellipsis;
             pointer-events: none;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             z-index: 1000;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
         }
-        .marker-tooltip::after {
+        .marker-tooltip-list::after {
             content: '';
             position: absolute;
             top: 100%;
             left: 50%;
             transform: translateX(-50%);
             border: 5px solid transparent;
-            border-top-color: rgba(0,0,0,0.85);
+            border-top-color: rgba(0,0,0,0.9);
+        }
+        .marker-tooltip-list .tt-title {
+            font-weight: 600;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #8ab4f8;
+        }
+        .marker-tooltip-list .tt-item {
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 11px;
+        }
+        .marker-tooltip-list .tt-item:last-child {
+            border-bottom: none;
+        }
+        .marker-tooltip-list .tt-item .tt-address {
+            color: #aaa;
+            font-size: 10px;
         }
         
-        .marker-container:hover .marker-tooltip {
+        .custom-marker:hover .marker-tooltip-list {
             display: block;
         }
         
-        .marker-container:hover .marker-label {
-            background: rgba(26, 115, 232, 1);
-            box-shadow: 0 2px 8px rgba(26,115,232,0.4);
+        /* ============================================================
+           СТИЛИ ДЛЯ КЛАСТЕРОВ (объединённых точек)
+           ============================================================ */
+        
+        .cluster-marker {
+            background: #1a73e8;
+            color: white;
+            border-radius: 50%;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            border: 2px solid white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .cluster-marker:hover {
+            transform: scale(1.1);
+            background: #1557b0;
+        }
+        
+        /* Кластеры разных размеров */
+        .cluster-marker.small { width: 30px; height: 30px; font-size: 11px; }
+        .cluster-marker.medium { width: 38px; height: 38px; font-size: 14px; }
+        .cluster-marker.large { width: 46px; height: 46px; font-size: 16px; }
+        
+        /* Кастомный попап для кластера */
+        .cluster-popup .leaflet-popup-content-wrapper {
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .cluster-popup .leaflet-popup-content {
+            font-size: 13px;
+            max-height: 300px;
+            overflow-y: auto;
+            min-width: 200px;
+        }
+        .cluster-popup .leaflet-popup-content .popup-item {
+            padding: 4px 0;
+            border-bottom: 1px solid #e8eaed;
+            cursor: pointer;
+        }
+        .cluster-popup .leaflet-popup-content .popup-item:last-child {
+            border-bottom: none;
+        }
+        .cluster-popup .leaflet-popup-content .popup-item:hover {
+            background: #f1f3f4;
+        }
+        .cluster-popup .leaflet-popup-content .popup-title {
+            font-weight: 600;
+            color: #1a73e8;
+        }
+        .cluster-popup .leaflet-popup-content .popup-address {
+            color: #5f6368;
+            font-size: 12px;
+        }
+        .cluster-popup .leaflet-popup-content .popup-click-hint {
+            color: #999;
+            font-size: 11px;
+            font-style: italic;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #e8eaed;
         }
         
         @media (max-width: 768px) {
@@ -183,7 +270,11 @@
             .layer-control { bottom: 8px; right: 8px; left: 8px; justify-content: center; }
             .marker-label { font-size: 9px; padding: 1px 6px; }
             .marker-dot { width: 8px; height: 8px; }
-            .marker-tooltip { font-size: 9px; max-width: 200px; }
+            .cluster-marker { width: 28px; height: 28px; font-size: 11px; }
+            .cluster-marker.small { width: 24px; height: 24px; font-size: 10px; }
+            .cluster-marker.medium { width: 32px; height: 32px; font-size: 12px; }
+            .cluster-marker.large { width: 38px; height: 38px; font-size: 14px; }
+            .marker-tooltip-list { font-size: 10px; min-width: 120px; max-width: 200px; }
         }
     </style>
 </head>
@@ -218,13 +309,14 @@
     </div>
     
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     
     <script>
     // ============================================================
     // ПЕРЕМЕННЫЕ
     // ============================================================
     var map = null;
-    var markerLayer = null;
+    var clusterGroup = null;
     var allData = [];
     var tileLayers = {};
     var currentLayer = null;
@@ -262,68 +354,160 @@
     }
     
     // ============================================================
-    // ОТРИСОВКА МАРКЕРОВ С НАЗВАНИЯМИ
+    // СОЗДАНИЕ МАРКЕРА ДЛЯ ОДНОГО ОБЪЕКТА
+    // ============================================================
+    function createMarker(item, index) {
+        var title = item.title || '';
+        var address = item.address_clean || item.address || '';
+        
+        var displayTitle = title;
+        if (displayTitle.length > 25) {
+            displayTitle = displayTitle.substring(0, 23) + '…';
+        }
+        
+        var html = '<div class="custom-marker" data-index="' + index + '">' +
+            '<div class="marker-dot"></div>' +
+            '<span class="marker-label">' + displayTitle + '</span>' +
+            '<div class="marker-tooltip-list">' +
+            '<div class="tt-title">' + title + '</div>' +
+            '<div class="tt-item"><span class="tt-address">' + address + '</span></div>' +
+            '</div>' +
+            '</div>';
+        
+        var icon = L.divIcon({
+            html: html,
+            className: '',
+            iconSize: [0, 0],
+            iconAnchor: [0, -8]
+        });
+        
+        var marker = L.marker([item.lat, item.lon], {
+            icon: icon,
+            interactive: true,
+            keyboard: false
+        });
+        
+        marker._index = index;
+        
+        // Клик — масштабирование
+        marker.on('click', function(e) {
+            var idx = e.target._index;
+            var item = allData[idx];
+            if (item) {
+                map.setView([item.lat, item.lon], 17, {
+                    animate: true,
+                    duration: 0.5
+                });
+            }
+        });
+        
+        return marker;
+    }
+    
+    // ============================================================
+    // СОЗДАНИЕ КЛАСТЕРА (объединение точек)
+    // ============================================================
+    function createClusterIcon(cluster) {
+        var count = cluster.getChildCount();
+        
+        var sizeClass = 'small';
+        if (count > 10) sizeClass = 'medium';
+        if (count > 30) sizeClass = 'large';
+        
+        var html = '<div class="cluster-marker ' + sizeClass + '">' + count + '</div>';
+        
+        return L.divIcon({
+            html: html,
+            className: '',
+            iconSize: [0, 0],
+            iconAnchor: [0, 0]
+        });
+    }
+    
+    // ============================================================
+    // СОЗДАНИЕ ПОПАПА ДЛЯ КЛАСТЕРА (список объектов)
+    // ============================================================
+    function createClusterPopup(cluster) {
+        var markers = cluster.getAllChildMarkers();
+        var items = markers.map(function(m) {
+            return allData[m._index];
+        }).filter(function(i) { return i; });
+        
+        var html = '<div style="max-height: 300px; overflow-y: auto; min-width: 200px;">';
+        
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            html += '<div class="popup-item" onclick="zoomToObject(' + item.lat + ',' + item.lon + ')">' +
+                '<div class="popup-title">' + (item.title || 'Без названия') + '</div>' +
+                '<div class="popup-address">' + (item.address_clean || item.address || '') + '</div>' +
+                '</div>';
+        }
+        
+        html += '<div class="popup-click-hint">👆 Кликните по названию для приближения</div>';
+        html += '</div>';
+        
+        return html;
+    }
+    
+    // ============================================================
+    // МАСШТАБИРОВАНИЕ К ОБЪЕКТУ
+    // ============================================================
+    function zoomToObject(lat, lon) {
+        map.setView([lat, lon], 17, {
+            animate: true,
+            duration: 0.5
+        });
+        // Закрываем попап
+        map.closePopup();
+    }
+    
+    // ============================================================
+    // ОТРИСОВКА ВСЕХ МАРКЕРОВ С КЛАСТЕРИЗАЦИЕЙ
     // ============================================================
     function renderMarkers() {
-        if (!markerLayer) return;
-        markerLayer.clearLayers();
-        markers = [];
-        
-        if (allData.length === 0) return;
-        
-        for (var i = 0; i < allData.length; i++) {
-            var item = allData[i];
-            var title = item.title || '';
-            var address = item.address_clean || item.address || '';
-            
-            // Обрезаем длинные названия
-            var displayTitle = title;
-            if (displayTitle.length > 25) {
-                displayTitle = displayTitle.substring(0, 23) + '…';
-            }
-            
-            // Создаём HTML для метки с точкой, текстом и тултипом
-            var html = '<div class="marker-container" data-index="' + i + '">' +
-                '<div class="marker-dot" style="background: #1a73e8;"></div>' +
-                '<span class="marker-label">' + displayTitle + '</span>' +
-                '<div class="marker-tooltip">' + address + '</div>' +
-                '</div>';
-            
-            var icon = L.divIcon({
-                html: html,
-                className: '',
-                iconSize: [0, 0],
-                iconAnchor: [0, -8]
-            });
-            
-            var marker = L.marker([item.lat, item.lon], {
-                icon: icon,
-                interactive: true,
-                keyboard: false
-            });
-            
-            // Сохраняем индекс
-            marker._index = i;
-            
-            // Клик по маркеру — масштабирование
-            marker.on('click', function(e) {
-                var idx = e.target._index;
-                var item = allData[idx];
-                if (item) {
-                    map.setView([item.lat, item.lon], 17, {
-                        animate: true,
-                        duration: 0.5
-                    });
-                }
-            });
-            
-            markerLayer.addLayer(marker);
-            markers.push(marker);
+        if (clusterGroup) {
+            map.removeLayer(clusterGroup);
         }
+        
+        clusterGroup = L.markerClusterGroup({
+            iconCreateFunction: createClusterIcon,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true,
+            maxClusterRadius: 50,
+            polygonOptions: {
+                weight: 0,
+                color: 'transparent'
+            }
+        });
+        
+        // Событие для кастомного попапа кластера
+        clusterGroup.on('clustermouseover', function(e) {
+            var cluster = e.layer;
+            var popupContent = createClusterPopup(cluster);
+            cluster.bindPopup(popupContent, {
+                className: 'cluster-popup',
+                maxWidth: 320,
+                minWidth: 200
+            });
+            cluster.openPopup();
+        });
+        
+        clusterGroup.on('clustermouseout', function(e) {
+            e.layer.closePopup();
+        });
+        
+        // Добавляем все маркеры
+        for (var i = 0; i < allData.length; i++) {
+            var marker = createMarker(allData[i], i);
+            clusterGroup.addLayer(marker);
+        }
+        
+        map.addLayer(clusterGroup);
         
         // Центрируем карту
         if (allData.length > 0) {
-            var bounds = markerLayer.getBounds();
+            var bounds = clusterGroup.getBounds();
             if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
             }
@@ -338,14 +522,13 @@
         if (!query) return;
         
         var found = false;
+        var foundItems = [];
         
-        for (var i = 0; i < markers.length; i++) {
-            var marker = markers[i];
-            var item = allData[marker._index];
+        for (var i = 0; i < allData.length; i++) {
+            var item = allData[i];
             var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1);
-            
             if (match) {
-                markerLayer.addLayer(marker);
+                foundItems.push(item);
                 if (!found) {
                     map.setView([item.lat, item.lon], 17, {
                         animate: true,
@@ -353,24 +536,45 @@
                     });
                     found = true;
                 }
-            } else {
-                markerLayer.removeLayer(marker);
             }
         }
         
         if (!found) {
             alert('Ничего не найдено');
             clearSearch();
+            return;
+        }
+        
+        // Если найдено несколько, показываем их в попапе
+        if (foundItems.length > 1) {
+            var html = '<div style="max-height: 250px; overflow-y: auto; min-width: 200px;">' +
+                '<div style="font-weight: 600; margin-bottom: 8px;">Найдено: ' + foundItems.length + '</div>';
+            for (var i = 0; i < foundItems.length; i++) {
+                var item = foundItems[i];
+                html += '<div class="popup-item" onclick="zoomToObject(' + item.lat + ',' + item.lon + ')">' +
+                    '<div class="popup-title">' + (item.title || 'Без названия') + '</div>' +
+                    '<div class="popup-address">' + (item.address_clean || item.address || '') + '</div>' +
+                    '</div>';
+            }
+            html += '<div class="popup-click-hint">👆 Кликните для приближения</div>';
+            html += '</div>';
+            
+            var popup = L.popup({
+                className: 'cluster-popup',
+                maxWidth: 320,
+                minWidth: 200
+            })
+            .setLatLng([foundItems[0].lat, foundItems[0].lon])
+            .setContent(html)
+            .openOn(map);
         }
     }
     
     function clearSearch() {
         document.getElementById('searchInput').value = '';
-        for (var i = 0; i < markers.length; i++) {
-            markerLayer.addLayer(markers[i]);
-        }
+        map.closePopup();
         if (allData.length > 0) {
-            var bounds = markerLayer.getBounds();
+            var bounds = clusterGroup.getBounds();
             if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [50, 50] });
             }
@@ -440,7 +644,6 @@
         L.control.zoom({ position: 'topleft' }).addTo(map);
         
         setupTileLayers();
-        markerLayer = L.layerGroup().addTo(map);
         loadData();
     });
     </script>
