@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>📍 Карта объектов</title>
     
-    <script src="https://api-maps.yandex.ru/2.0/?apikey=4a65ae8e-4fce-4b73-b0e8-9488d551b04f&lang=ru-RU" type="text/javascript"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -90,6 +91,10 @@
             z-index: 1000;
         }
         
+        /* Стили для Leaflet */
+        .leaflet-popup-content { font-size: 13px; }
+        .leaflet-popup-content b { color: #1a73e8; }
+        
         @media (max-width: 768px) {
             .header { flex-direction: column; align-items: stretch; gap: 6px; }
             .controls { justify-content: stretch; }
@@ -128,6 +133,9 @@
     
     <div class="updated-at" id="updatedAt"></div>
     
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <script>
     // ============================================================
     // КОНФИГУРАЦИЯ
@@ -145,21 +153,30 @@
     // ПЕРЕМЕННЫЕ
     // ============================================================
     var map = null;
-    var placemarks = [];
+    var markerLayer = null;
     var allData = [];
     var currentFilter = null;
     
     // ============================================================
-    // ИНИЦИАЛИЗАЦИЯ КАРТЫ
+    // ИНИЦИАЛИЗАЦИЯ КАРТЫ (Leaflet + OpenStreetMap)
     // ============================================================
-    ymaps.ready(function() {
-        map = new ymaps.Map('map', {
+    function initMap() {
+        map = L.map('map', {
             center: [55.76, 37.64],
             zoom: 11,
-            controls: ['zoomControl', 'fullscreenControl']
+            zoomControl: false
         });
+        
+        L.control.zoom({ position: 'topleft' }).addTo(map);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 19
+        }).addTo(map);
+        
+        markerLayer = L.layerGroup().addTo(map);
         loadData();
-    });
+    }
     
     // ============================================================
     // ЗАГРУЗКА ДАННЫХ
@@ -198,50 +215,47 @@
     // ОТРИСОВКА МАРКЕРОВ
     // ============================================================
     function renderMarkers() {
-        // Удаляем старые метки
-        for (var i = 0; i < placemarks.length; i++) {
-            map.geoObjects.remove(placemarks[i]);
-        }
-        placemarks = [];
-        
+        markerLayer.clearLayers();
         if (allData.length === 0) return;
         
         for (var i = 0; i < allData.length; i++) {
             var item = allData[i];
             var color = STAGE_COLORS[item.stage_id] || STAGE_COLORS.default;
-            var stage = item.stage_id || 'Без стадии';
             
-            var placemark = new ymaps.Placemark(
-                [item.lat, item.lon],
-                {
-                    id: i,
-                    title: item.title || 'Без названия',
-                    address: item.address_clean || item.address || '',
-                    stage: stage,
-                    balloonContentHeader: '<b>' + (item.title || 'Без названия') + '</b>',
-                    balloonContentBody: '<div style="max-width: 260px; font-size: 13px;">' +
-                        '<p><strong>📍 Адрес:</strong> ' + (item.address_clean || item.address || 'Не указан') + '</p>' +
-                        '<p><strong>📊 Стадия:</strong> ' + stage + '</p>' +
-                        '<p><strong>📌 Координаты:</strong> ' + item.lat + ', ' + item.lon + '</p>' +
-                        '</div>'
-                },
-                {
-                    preset: 'islands#circleIcon',
-                    iconColor: color,
-                    draggable: false,
-                    openBalloonOnClick: true
-                }
-            );
+            var iconHtml = '<div style="' +
+                'background: ' + color + ';' +
+                'width: 22px; height: 22px;' +
+                'border-radius: 50%;' +
+                'border: 3px solid white;' +
+                'box-shadow: 0 2px 6px rgba(0,0,0,0.3);' +
+                'display: flex; align-items: center; justify-content: center;' +
+                'font-size: 10px; color: white; font-weight: bold;' +
+                '">' + (i + 1) + '</div>';
             
-            placemarks.push(placemark);
-            map.geoObjects.add(placemark);
+            var icon = L.divIcon({
+                html: iconHtml,
+                className: '',
+                iconSize: [22, 22],
+                iconAnchor: [11, 11]
+            });
+            
+            var marker = L.marker([item.lat, item.lon], { icon: icon });
+            
+            var popupContent = '<div style="min-width: 200px; font-size: 13px;">' +
+                '<b>' + (item.title || 'Без названия') + '</b><br>' +
+                '<span style="color: #5f6368;">' + (item.address_clean || item.address || '') + '</span><br>' +
+                '<span style="font-size: 12px; color: #5f6368;">Стадия: ' + (item.stage_id || '—') + '</span>' +
+                '</div>';
+            
+            marker.bindPopup(popupContent, { maxWidth: 300 });
+            marker._index = i;
+            markerLayer.addLayer(marker);
         }
         
-        // Центрируем карту на всех точках
         if (allData.length > 0) {
-            var bounds = map.geoObjects.getBounds();
-            if (bounds) {
-                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+            var bounds = markerLayer.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
             }
         }
     }
@@ -287,13 +301,18 @@
             currentFilter = stage;
         }
         
-        for (var i = 0; i < placemarks.length; i++) {
-            var item = allData[i];
-            var show = !currentFilter || item.stage_id === currentFilter;
-            placemarks[i].options.set('visible', show);
-        }
+        markerLayer.eachLayer(function(marker) {
+            var item = allData[marker._index];
+            if (item) {
+                var show = !currentFilter || item.stage_id === currentFilter;
+                if (show) {
+                    markerLayer.addLayer(marker);
+                } else {
+                    markerLayer.removeLayer(marker);
+                }
+            }
+        });
         
-        // Подсвечиваем активный фильтр
         var items = document.querySelectorAll('.legend-item');
         for (var i = 0; i < items.length; i++) {
             items[i].style.background = items[i].textContent.trim() === stage && currentFilter ? '#e8f0fe' : 'transparent';
@@ -308,25 +327,25 @@
         if (!query) return;
         
         var found = false;
-        
-        for (var i = 0; i < placemarks.length; i++) {
-            var item = allData[i];
-            var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1) || 
-                       (item.address_clean && item.address_clean.toLowerCase().indexOf(query) !== -1) ||
-                       (item.address && item.address.toLowerCase().indexOf(query) !== -1);
-            
-            if (match) {
-                placemarks[i].options.set('visible', true);
-                if (!found) {
-                    var coords = placemarks[i].geometry.getCoordinates();
-                    map.setCenter(coords, 15);
-                    placemarks[i].balloon.open();
-                    found = true;
+        markerLayer.eachLayer(function(marker) {
+            var item = allData[marker._index];
+            if (item) {
+                var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1) || 
+                           (item.address_clean && item.address_clean.toLowerCase().indexOf(query) !== -1) ||
+                           (item.address && item.address.toLowerCase().indexOf(query) !== -1);
+                
+                if (match) {
+                    markerLayer.addLayer(marker);
+                    if (!found) {
+                        map.setView(marker.getLatLng(), 15);
+                        marker.openPopup();
+                        found = true;
+                    }
+                } else if (!currentFilter) {
+                    markerLayer.removeLayer(marker);
                 }
-            } else if (!currentFilter) {
-                placemarks[i].options.set('visible', false);
             }
-        }
+        });
         
         if (!found) {
             alert('🔍 Ничего не найдено');
@@ -338,8 +357,12 @@
         document.getElementById('searchInput').value = '';
         currentFilter = null;
         
-        for (var i = 0; i < placemarks.length; i++) {
-            placemarks[i].options.set('visible', true);
+        for (var i = 0; i < allData.length; i++) {
+            markerLayer.eachLayer(function(marker) {
+                if (marker._index === i) {
+                    markerLayer.addLayer(marker);
+                }
+            });
         }
         
         var items = document.querySelectorAll('.legend-item');
@@ -348,9 +371,9 @@
         }
         
         if (allData.length > 0) {
-            var bounds = map.geoObjects.getBounds();
-            if (bounds) {
-                map.setBounds(bounds, { checkZoomRange: true, zoomMargin: 30 });
+            var bounds = markerLayer.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
             }
         }
     }
@@ -366,6 +389,11 @@
     setInterval(function() {
         loadData();
     }, 5 * 60 * 1000);
+    
+    // ============================================================
+    // ЗАПУСК
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', initMap);
     </script>
 </body>
 </html>
