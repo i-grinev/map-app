@@ -16,11 +16,10 @@ ADDRESS_FIELD = 'ufCrm8FullAdress'
 YANDEX_API_KEY = os.environ.get('YANDEX_API_KEY', '')
 
 # Настройки скорости
-MAX_WORKERS = 10          # Количество параллельных запросов
-BATCH_SIZE = 50           # Размер пакета для вывода прогресса
+MAX_WORKERS = 10
+BATCH_SIZE = 50
 CACHE_FILE = 'data/geocode_cache.json'
 
-# Проверяем наличие ключей
 if not BITRIX_WEBHOOK:
     raise Exception("❌ BITRIX_WEBHOOK не задан в переменных окружения!")
 
@@ -39,23 +38,76 @@ def save_cache(cache):
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА (минимальная)
+# НОРМАЛИЗАЦИЯ АДРЕСА (МИНИМАЛЬНАЯ — только убираем мусор)
 # ============================================================
 def normalize_address(address):
+    """
+    Минимальная очистка адреса:
+    - Убираем звёздочки, решётки
+    - Убираем лишние переносы строк
+    - Всё остальное ОСТАВЛЯЕМ для геокодера
+    """
     if not address:
         return ''
+    
     text = str(address).strip()
+    
+    # Убираем звёздочки, решётки
     text = text.replace('*', '').replace('#', '')
+    
+    # Заменяем переносы строк на пробелы
     text = text.replace('\n', ' ').replace('\r', ' ')
+    
+    # Убираем множественные пробелы
     text = re.sub(r'\s+', ' ', text)
+    
+    # Убираем лишние запятые в конце
     text = text.strip().rstrip(',').rstrip('.')
-    return text if len(text) >= 5 else ''
+    
+    # Если адрес слишком короткий — возвращаем как есть
+    if len(text) < 5:
+        return text
+    
+    return text
 
 # ============================================================
-# ГЕОКОДИРОВАНИЕ (быстрое)
+# ГЕОКОДИРОВАНИЕ (с полным адресом)
 # ============================================================
+def geocode_address(address, cache):
+    if not address:
+        return None
+    
+    cache_key = hashlib.md5(address.encode()).hexdigest()
+    
+    # Проверяем кэш
+    if cache_key in cache and cache[cache_key]:
+        return cache[cache_key]
+    
+    # Пробуем геокодеры
+    coords = None
+    
+    # 1. Яндекс (если есть ключ)
+    if YANDEX_API_KEY:
+        coords = geocode_yandex(address)
+        if coords:
+            cache[cache_key] = coords
+            save_cache(cache)
+            return coords
+    
+    # 2. OpenStreetMap (бесплатно, без ключа)
+    coords = geocode_osm(address)
+    if coords:
+        cache[cache_key] = coords
+        save_cache(cache)
+        return coords
+    
+    # Не найдено
+    cache[cache_key] = None
+    save_cache(cache)
+    return None
+
 def geocode_yandex(address):
-    """Геокодирование через Яндекс (быстрый режим)"""
+    """Геокодирование через Яндекс"""
     if not YANDEX_API_KEY:
         return None
     
@@ -68,8 +120,7 @@ def geocode_yandex(address):
             'results': 1,
             'lang': 'ru_RU'
         }
-        # Уменьшаем таймаут до 3 секунд
-        response = requests.get(url, params=params, timeout=3)
+        response = requests.get(url, params=params, timeout=5)
         
         if response.status_code == 200:
             data = response.json()
@@ -77,13 +128,16 @@ def geocode_yandex(address):
             if members:
                 pos = members[0]['GeoObject']['Point']['pos']
                 lon, lat = pos.split(' ')
-                return {'lat': float(lat), 'lon': float(lon)}
+                lat, lon = float(lat), float(lon)
+                # Проверяем, что это не центр Москвы
+                if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
+                    return {'lat': lat, 'lon': lon}
         return None
     except:
         return None
 
 def geocode_osm(address):
-    """Геокодирование через OpenStreetMap (быстрый режим)"""
+    """Геокодирование через OpenStreetMap"""
     try:
         url = "https://nominatim.openstreetmap.org/search"
         params = {
@@ -95,50 +149,25 @@ def geocode_osm(address):
         response = requests.get(
             url,
             params=params,
-            headers={'User-Agent': 'MapApp/1.0'},
-            timeout=3  # Уменьшаем таймаут
+            headers={'User-Agent': 'MapApp/1.0 (https://i-grinev.github.io/map-app)'},
+            timeout=5
         )
         
         if response.status_code == 200 and response.json():
             data = response.json()[0]
-            return {'lat': float(data['lat']), 'lon': float(data['lon'])}
+            lat, lon = float(data['lat']), float(data['lon'])
+            if abs(lat - 55.7558) > 0.01 or abs(lon - 37.6173) > 0.01:
+                return {'lat': lat, 'lon': lon}
         return None
     except:
         return None
-
-def geocode_address(address, cache):
-    """Геокодирование с кэшем"""
-    if not address:
-        return None
-    
-    cache_key = hashlib.md5(address.encode()).hexdigest()
-    
-    # Проверяем кэш
-    if cache_key in cache and cache[cache_key]:
-        return cache[cache_key]
-    
-    # Сначала пробуем Яндекс (если есть ключ) — он быстрее
-    if YANDEX_API_KEY:
-        coords = geocode_yandex(address)
-        if coords and (abs(coords['lat'] - 55.7558) > 0.01 or abs(coords['lon'] - 37.6173) > 0.01):
-            cache[cache_key] = coords
-            return coords
-    
-    # Потом OSM
-    coords = geocode_osm(address)
-    if coords and (abs(coords['lat'] - 55.7558) > 0.01 or abs(coords['lon'] - 37.6173) > 0.01):
-        cache[cache_key] = coords
-        return coords
-    
-    # Не найдено
-    cache[cache_key] = None
-    return None
 
 # ============================================================
 # ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА
 # ============================================================
 def process_item(item, cache):
     """Обработка одного элемента"""
+    # Берём ПОЛНЫЙ адрес
     address = item.get(ADDRESS_FIELD, '')
     clean = normalize_address(address) if address else ''
     
@@ -157,7 +186,7 @@ def process_item(item, cache):
         'stage_name': item.get('stage_name', '')
     }, coords is not None
 
-def process_addresses_parallel(items, cache):
+def process_parallel(items, cache):
     """Параллельная обработка всех адресов"""
     results = []
     geocoded = 0
@@ -167,13 +196,11 @@ def process_addresses_parallel(items, cache):
     print(f"   Запуск {MAX_WORKERS} параллельных потоков...")
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        # Отправляем все задачи
         futures = {
             executor.submit(process_item, item, cache): i 
             for i, item in enumerate(items)
         }
         
-        # Обрабатываем результаты по мере завершения
         completed = 0
         for future in as_completed(futures):
             try:
@@ -255,7 +282,7 @@ def main():
     
     # Параллельное геокодирование
     print(f"📍 Геокодирование ({len(items)} адресов)...")
-    results, geocoded = process_addresses_parallel(items, cache)
+    results, geocoded = process_parallel(items, cache)
     
     # Сохраняем кэш
     save_cache(cache)
