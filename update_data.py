@@ -41,7 +41,7 @@ def save_cache(cache):
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
 # ============================================================
-# ФУНКЦИЯ ДЛЯ ИЗВЛЕЧЕНИЯ СТАДИИ ИЗ ПОЛНОГО ID
+# ФУНКЦИЯ ДЛЯ ИЗВЛЕЧЕНИЯ СТАДИИ
 # ============================================================
 def get_stage_short(stage_id):
     if not stage_id:
@@ -49,33 +49,46 @@ def get_stage_short(stage_id):
     parts = stage_id.split(':')
     return parts[-1] if parts else 'default'
 
-# ============================================================
-# ПРОВЕРКА — НУЖНО ЛИ ИГНОРИРОВАТЬ
-# ============================================================
 def should_ignore(stage_id):
-    """Проверяет, нужно ли игнорировать объект по стадии"""
     if not stage_id:
         return False
     stage = get_stage_short(stage_id)
     return stage in IGNORE_STAGES
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА
+# НОРМАЛИЗАЦИЯ АДРЕСА (МИНИМАЛЬНАЯ — почти ничего не удаляем!)
 # ============================================================
 def normalize_address(address):
+    """
+    Минимальная очистка адреса:
+    - Убираем звёздочки и решётки
+    - Убираем лишние переносы строк
+    - ВСЁ ОСТАЛЬНОЕ СОХРАНЯЕМ для геокодера
+    """
     if not address:
         return ''
     
     text = str(address).strip()
+    
+    # 1. Убираем только мусорные символы
     text = text.replace('*', '').replace('#', '')
     text = text.replace('\n', ' ').replace('\r', ' ')
+    
+    # 2. Убираем только явный мусор в скобках
     text = re.sub(r'\([^)]*\)', '', text)
     text = re.sub(r'\[[^\]]*\]', '', text)
-    text = re.sub(r'^г\.\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
     
+    # 3. Убираем "Адрес:" в начале
+    text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
+    
+    # 4. Убираем "г." в начале (НО сохраняем город!)
+    text = re.sub(r'^\s*г\.\s*', '', text, flags=re.IGNORECASE)
+    
+    # 5. Убираем ЖК, МЦД, МЦК, Метро (только если они отдельно)
+    text = re.sub(r'\b(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
+    
+    # 6. Заменяем ТОЛЬКО ОЧЕВИДНЫЕ сокращения
     replacements = {
         r'\bул\.\b': 'улица',
         r'\bпр-д\b': 'проезд',
@@ -97,43 +110,20 @@ def normalize_address(address):
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
+    # 7. Формат "23к7" -> "23 корпус 7"
     text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
     
-    patterns_to_remove = [
-        r'подъезд\s*\d+[А-Яа-яёЁ]?',
-        r'под\.?\s*\d+[А-Яа-яёЁ]?',
-        r'п\.\s*\d+[А-Яа-яёЁ]?',
-        r'этаж\s*\d+[А-Яа-яёЁ]?',
-        r'эт\.?\s*\d+[А-Яа-яёЁ]?',
-        r'эт\s*\d+[А-Яа-яёЁ]?',
-        r'кв\.\s*[\d/А-Яа-яёЁ]+',
-        r'квартира\s*[\d/А-Яа-яёЁ]+',
-        r'апарт\.?\s*[\d/А-Яа-яёЁ]+',
-        r'апартаменты\s*[\d/А-Яа-яёЁ]+',
-        r'пом\.\s*[\d/А-Яа-яёЁ]+',
-        r'помещение\s*[\d/А-Яа-яёЁ]+',
-        r'студия\s*[\d/А-Яа-яёЁ]+',
-        r'ком\.\s*[\d/А-Яа-яёЁ]+',
-        r'комната\s*[\d/А-Яа-яёЁ]+',
-        r'секция\s*\d+',
-        r'парадная\s*\d+',
-    ]
-    
-    for pattern in patterns_to_remove:
-        text = re.sub(r',?\s*' + pattern, '', text, flags=re.IGNORECASE)
-    
+    # 8. Убираем ТОЛЬКО явные пояснения в КОНЦЕ (не трогаем корпуса!)
     text = re.sub(r',?\s*код\s*домофона[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*домофон[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*ключ[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*дверь[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*вход[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*парковка[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*Wi-Fi[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*Важно[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*обязательно[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*геолокация[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*со стороны[\s\S]*$', '', text, flags=re.IGNORECASE)
     
+    # 9. Чистим лишние пробелы и запятые
     text = re.sub(r',+', ',', text)
     text = re.sub(r'\s+', ' ', text)
     text = text.strip().rstrip(',').rstrip('.')
@@ -141,6 +131,7 @@ def normalize_address(address):
     if len(text) < 5:
         return text
     
+    # 10. Добавляем "Москва" только если нет города
     if not re.search(r'(Москва|Санкт-Петербург|Краснодар|Ялта|Сочи|Казань|Екатеринбург|Новосибирск|Мытищи|Видное|Люберцы|Химки|Долгопрудный|Ступино|Котельники|Красногорск|область|край|республика|район|поселок|деревня|село|город)', text, re.IGNORECASE):
         text = 'Москва, ' + text
     
@@ -231,12 +222,11 @@ def geocode_osm(address):
         return None
 
 # ============================================================
-# ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА (с игнорированием)
+# ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА
 # ============================================================
 def process_item(item, cache):
     stage_id = item.get('stageId', '')
     
-    # Проверяем — нужно ли игнорировать
     if should_ignore(stage_id):
         return {
             'id': item.get('id'),
@@ -274,7 +264,6 @@ def process_parallel(items, cache):
     start_time = time.time()
     
     print(f"   Запуск {MAX_WORKERS} параллельных потоков...")
-    print(f"   Игнорируем стадию: {IGNORE_STAGES}")
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {
@@ -352,7 +341,6 @@ def fetch_from_bitrix():
 def main():
     print(f"🔄 Обновление данных: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"   Яндекс ключ: {'✅ Есть' if YANDEX_API_KEY else '❌ Нет'}")
-    print(f"   Игнорируем стадии: {IGNORE_STAGES}")
     
     cache = load_cache()
     print(f"   Кэш: {len(cache)} записей")
@@ -362,7 +350,6 @@ def main():
         print("❌ Нет данных из Битрикс24")
         return
     
-    # Фильтруем игнорируемые ДО геокодирования (для скорости)
     total_before = len(items)
     items_to_process = [item for item in items if not should_ignore(item.get('stageId', ''))]
     ignored_count = total_before - len(items_to_process)
@@ -371,8 +358,6 @@ def main():
     print(f"📍 Геокодирование...")
     results, geocoded, ignored = process_parallel(items_to_process, cache)
     
-    # Добавляем игнорируемые объекты в результат (для статистики)
-    # Они уже не будут на карте, но мы сохраним их в JSON с пометкой
     ignored_results = []
     for item in items:
         if should_ignore(item.get('stageId', '')):
