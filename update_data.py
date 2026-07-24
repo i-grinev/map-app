@@ -20,6 +20,9 @@ MAX_WORKERS = 10
 BATCH_SIZE = 50
 CACHE_FILE = 'data/geocode_cache.json'
 
+# Стадии, которые ИГНОРИРУЕМ (не геокодируем и не выводим)
+IGNORE_STAGES = ['UC_QA1YNG']
+
 if not BITRIX_WEBHOOK:
     raise Exception("❌ BITRIX_WEBHOOK не задан в переменных окружения!")
 
@@ -38,42 +41,46 @@ def save_cache(cache):
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА (исправленная)
+# ФУНКЦИЯ ДЛЯ ИЗВЛЕЧЕНИЯ СТАДИИ ИЗ ПОЛНОГО ID
+# ============================================================
+def get_stage_short(stage_id):
+    if not stage_id:
+        return 'default'
+    parts = stage_id.split(':')
+    return parts[-1] if parts else 'default'
+
+# ============================================================
+# ПРОВЕРКА — НУЖНО ЛИ ИГНОРИРОВАТЬ
+# ============================================================
+def should_ignore(stage_id):
+    """Проверяет, нужно ли игнорировать объект по стадии"""
+    if not stage_id:
+        return False
+    stage = get_stage_short(stage_id)
+    return stage in IGNORE_STAGES
+
+# ============================================================
+# НОРМАЛИЗАЦИЯ АДРЕСА
 # ============================================================
 def normalize_address(address):
-    """
-    Минимальная очистка адреса:
-    - Убираем звёздочки, решётки
-    - Убираем лишние переносы строк
-    - Заменяем сокращения на полные слова
-    """
     if not address:
         return ''
     
     text = str(address).strip()
-    
-    # 1. Убираем мусорные символы
     text = text.replace('*', '').replace('#', '')
     text = text.replace('\n', ' ').replace('\r', ' ')
-    
-    # 2. Убираем скобки и их содержимое
     text = re.sub(r'\([^)]*\)', '', text)
     text = re.sub(r'\[[^\]]*\]', '', text)
-    
-    # 3. Убираем "г.", "Адрес:" в начале
     text = re.sub(r'^г\.\s*', '', text, flags=re.IGNORECASE)
     text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
-    
-    # 4. Убираем ЖК, МЦД, МЦК, Метро с названиями
     text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
     text = re.sub(r'(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
     
-    # 5. Заменяем сокращения на полные слова (только целые слова!)
     replacements = {
         r'\bул\.\b': 'улица',
         r'\bпр-д\b': 'проезд',
         r'\bпр-кт\b': 'проспект',
-        r'\bпр-т\b': 'проспект',     # ДОБАВЛЕНО! для "пр-т Ленинградский"
+        r'\bпр-т\b': 'проспект',
         r'\bпр\.\b': 'проезд',
         r'\bпер\.\b': 'переулок',
         r'\bш\.\b': 'шоссе',
@@ -90,10 +97,8 @@ def normalize_address(address):
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
-    # 6. Формат "23к7" -> "23 корпус 7"
     text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
     
-    # 7. Убираем детали (подъезд, этаж, квартира и т.д.)
     patterns_to_remove = [
         r'подъезд\s*\d+[А-Яа-яёЁ]?',
         r'под\.?\s*\d+[А-Яа-яёЁ]?',
@@ -117,7 +122,6 @@ def normalize_address(address):
     for pattern in patterns_to_remove:
         text = re.sub(r',?\s*' + pattern, '', text, flags=re.IGNORECASE)
     
-    # 8. Убираем пояснения в конце
     text = re.sub(r',?\s*код\s*домофона[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*домофон[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*ключ[\s\S]*$', '', text, flags=re.IGNORECASE)
@@ -130,16 +134,13 @@ def normalize_address(address):
     text = re.sub(r',?\s*геолокация[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*со стороны[\s\S]*$', '', text, flags=re.IGNORECASE)
     
-    # 9. Чистим лишние запятые и пробелы
     text = re.sub(r',+', ',', text)
     text = re.sub(r'\s+', ' ', text)
     text = text.strip().rstrip(',').rstrip('.')
     
-    # 10. Если адрес слишком короткий — возвращаем как есть
     if len(text) < 5:
         return text
     
-    # 11. Добавляем Москву если нет города
     if not re.search(r'(Москва|Санкт-Петербург|Краснодар|Ялта|Сочи|Казань|Екатеринбург|Новосибирск|Мытищи|Видное|Люберцы|Химки|Долгопрудный|Ступино|Котельники|Красногорск|область|край|республика|район|поселок|деревня|село|город)', text, re.IGNORECASE):
         text = 'Москва, ' + text
     
@@ -154,13 +155,11 @@ def geocode_address(address, cache):
     
     cache_key = hashlib.md5(address.encode()).hexdigest()
     
-    # Проверяем кэш
     if cache_key in cache and cache[cache_key]:
         return cache[cache_key]
     
     coords = None
     
-    # 1. Яндекс (если есть ключ)
     if YANDEX_API_KEY:
         coords = geocode_yandex(address)
         if coords:
@@ -168,14 +167,12 @@ def geocode_address(address, cache):
             save_cache(cache)
             return coords
     
-    # 2. OpenStreetMap (бесплатно, без ключа)
     coords = geocode_osm(address)
     if coords:
         cache[cache_key] = coords
         save_cache(cache)
         return coords
     
-    # Не найдено
     cache[cache_key] = None
     save_cache(cache)
     return None
@@ -234,9 +231,25 @@ def geocode_osm(address):
         return None
 
 # ============================================================
-# ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА
+# ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА (с игнорированием)
 # ============================================================
 def process_item(item, cache):
+    stage_id = item.get('stageId', '')
+    
+    # Проверяем — нужно ли игнорировать
+    if should_ignore(stage_id):
+        return {
+            'id': item.get('id'),
+            'title': item.get('title', ''),
+            'address': item.get(ADDRESS_FIELD, ''),
+            'address_clean': '',
+            'lat': None,
+            'lon': None,
+            'stage_id': stage_id,
+            'stage_name': item.get('stage_name', ''),
+            'ignored': True
+        }, False
+    
     address = item.get(ADDRESS_FIELD, '')
     clean = normalize_address(address) if address else ''
     coords = geocode_address(clean, cache) if clean else None
@@ -248,17 +261,20 @@ def process_item(item, cache):
         'address_clean': clean,
         'lat': coords['lat'] if coords else None,
         'lon': coords['lon'] if coords else None,
-        'stage_id': item.get('stageId', ''),
-        'stage_name': item.get('stage_name', '')
+        'stage_id': stage_id,
+        'stage_name': item.get('stage_name', ''),
+        'ignored': False
     }, coords is not None
 
 def process_parallel(items, cache):
     results = []
     geocoded = 0
+    ignored = 0
     total = len(items)
     start_time = time.time()
     
     print(f"   Запуск {MAX_WORKERS} параллельных потоков...")
+    print(f"   Игнорируем стадию: {IGNORE_STAGES}")
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = {
@@ -273,17 +289,19 @@ def process_parallel(items, cache):
                 results.append(result)
                 if found:
                     geocoded += 1
+                if result.get('ignored'):
+                    ignored += 1
                 
                 completed += 1
                 if completed % BATCH_SIZE == 0 or completed == total:
                     elapsed = time.time() - start_time
-                    print(f"   Обработано: {completed}/{total} | Найдено: {geocoded} | Время: {elapsed:.0f}с")
+                    print(f"   Обработано: {completed}/{total} | Найдено: {geocoded} | Игнорировано: {ignored} | Время: {elapsed:.0f}с")
                     
             except Exception as e:
                 print(f"   ❌ Ошибка: {e}")
                 completed += 1
     
-    return results, geocoded
+    return results, geocoded, ignored
 
 # ============================================================
 # ЗАПРОС К БИТРИКС24
@@ -334,36 +352,58 @@ def fetch_from_bitrix():
 def main():
     print(f"🔄 Обновление данных: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"   Яндекс ключ: {'✅ Есть' if YANDEX_API_KEY else '❌ Нет'}")
+    print(f"   Игнорируем стадии: {IGNORE_STAGES}")
     
-    # Загружаем кэш
     cache = load_cache()
     print(f"   Кэш: {len(cache)} записей")
     
-    # Получаем данные из Битрикса
     items = fetch_from_bitrix()
     if not items:
         print("❌ Нет данных из Битрикс24")
         return
     
-    # Параллельное геокодирование
-    print(f"📍 Геокодирование ({len(items)} адресов)...")
-    results, geocoded = process_parallel(items, cache)
+    # Фильтруем игнорируемые ДО геокодирования (для скорости)
+    total_before = len(items)
+    items_to_process = [item for item in items if not should_ignore(item.get('stageId', ''))]
+    ignored_count = total_before - len(items_to_process)
+    print(f"   Всего: {total_before}, игнорируем: {ignored_count}, обрабатываем: {len(items_to_process)}")
     
-    # Сохраняем кэш
+    print(f"📍 Геокодирование...")
+    results, geocoded, ignored = process_parallel(items_to_process, cache)
+    
+    # Добавляем игнорируемые объекты в результат (для статистики)
+    # Они уже не будут на карте, но мы сохраним их в JSON с пометкой
+    ignored_results = []
+    for item in items:
+        if should_ignore(item.get('stageId', '')):
+            ignored_results.append({
+                'id': item.get('id'),
+                'title': item.get('title', ''),
+                'address': item.get(ADDRESS_FIELD, ''),
+                'address_clean': '',
+                'lat': None,
+                'lon': None,
+                'stage_id': item.get('stageId', ''),
+                'stage_name': item.get('stage_name', ''),
+                'ignored': True
+            })
+    
+    all_results = results + ignored_results
+    
     save_cache(cache)
     
-    # Сохраняем результаты
     output_file = 'data/addresses.json'
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump({
             'updated_at': datetime.now().isoformat(),
-            'total': len(results),
+            'total': len(all_results),
             'geocoded': geocoded,
-            'items': results
+            'ignored': ignored_count,
+            'items': all_results
         }, f, ensure_ascii=False, indent=2)
     
-    total = len(results)
-    print(f"\n✅ Готово! Всего: {total}, с координатами: {geocoded} ({geocoded/total*100:.0f}%)")
+    total = len(all_results)
+    print(f"\n✅ Готово! Всего: {total}, с координатами: {geocoded}, игнорировано: {ignored_count}")
     print(f"   Файл: {output_file}")
 
 if __name__ == '__main__':
