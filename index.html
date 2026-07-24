@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📍 Карта объектов</title>
+    <title>Карта объектов</title>
     
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
@@ -14,24 +13,24 @@
         
         .header {
             background: white;
-            padding: 12px 20px;
+            padding: 10px 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
             z-index: 1000;
             position: relative;
         }
-        .header h1 { font-size: 18px; color: #1a73e8; }
+        .header h1 { font-size: 17px; color: #1a73e8; }
         .header h1 .badge { font-size: 11px; background: #e8eaed; color: #5f6368; padding: 2px 8px; border-radius: 12px; font-weight: normal; margin-left: 8px; }
         
         .controls { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-        .controls input { padding: 6px 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 13px; min-width: 160px; outline: none; }
+        .controls input { padding: 5px 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 13px; min-width: 150px; outline: none; }
         .controls input:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
         
-        .btn { padding: 6px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .btn { padding: 5px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; transition: all 0.2s; }
         .btn-primary { background: #1a73e8; color: white; }
         .btn-primary:hover { background: #1557b0; }
         .btn-warning { background: #fbbc04; color: #333; }
@@ -39,27 +38,8 @@
         .btn-success { background: #34a853; color: white; }
         .btn-success:hover { background: #2d9248; }
         
-        .stats { font-size: 12px; color: #5f6368; padding: 4px 8px; background: #f1f3f4; border-radius: 4px; white-space: nowrap; }
-        #map { height: calc(100vh - 65px); width: 100%; }
-        
-        /* Стили для попапа */
-        .custom-popup .leaflet-popup-content-wrapper {
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-        }
-        .custom-popup .leaflet-popup-content {
-            font-size: 13px;
-            min-width: 150px;
-        }
-        .custom-popup .leaflet-popup-content b {
-            color: #1a73e8;
-            font-size: 14px;
-        }
-        .custom-popup .leaflet-popup-content .address {
-            color: #5f6368;
-            font-size: 12px;
-            margin-top: 2px;
-        }
+        .stats { font-size: 12px; color: #5f6368; padding: 4px 8px; background: #f1f3f4; border-radius: 4px; }
+        #map { height: calc(100vh - 57px); width: 100%; }
         
         .loading-overlay {
             position: fixed;
@@ -79,8 +59,8 @@
         
         .updated-at {
             position: fixed;
-            bottom: 20px;
-            left: 20px;
+            bottom: 15px;
+            left: 15px;
             font-size: 10px;
             color: #999;
             background: rgba(255,255,255,0.9);
@@ -89,36 +69,43 @@
             z-index: 1000;
         }
         
-        /* Кнопки переключения слоёв */
         .layer-control {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
+            bottom: 15px;
+            right: 15px;
             background: white;
-            padding: 8px 12px;
+            padding: 6px 10px;
             border-radius: 8px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.15);
             z-index: 1000;
             display: flex;
-            gap: 6px;
+            gap: 4px;
             flex-wrap: wrap;
         }
         .layer-control button {
-            padding: 4px 12px;
+            padding: 3px 10px;
             border: 1px solid #ddd;
             border-radius: 4px;
             background: white;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
             transition: all 0.2s;
         }
-        .layer-control button:hover {
-            background: #f0f0f0;
-        }
-        .layer-control button.active {
-            background: #1a73e8;
+        .layer-control button:hover { background: #f0f0f0; }
+        .layer-control button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
+        
+        /* Стили для текстовых меток на карте */
+        .label-marker {
+            background: rgba(26, 115, 232, 0.85);
             color: white;
-            border-color: #1a73e8;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+            white-space: nowrap;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            pointer-events: none;
         }
         
         @media (max-width: 768px) {
@@ -126,6 +113,7 @@
             .controls { justify-content: stretch; }
             .controls input { min-width: unset; width: 100%; }
             .layer-control { bottom: 10px; right: 10px; left: 10px; justify-content: center; }
+            .label-marker { font-size: 9px; padding: 1px 5px; }
         }
     </style>
 </head>
@@ -134,18 +122,18 @@
     <div class="loading-overlay" id="loading">
         <div class="loading-box">
             <div class="spinner"></div>
-            <p>Загрузка данных...</p>
+            <p>Загрузка...</p>
         </div>
     </div>
     
     <div class="header">
-        <h1>📍 Карта объектов <span class="badge" id="updateBadge">загрузка...</span></h1>
+        <h1>📍 <span id="pageTitle">Карта</span> <span class="badge" id="updateBadge"></span></h1>
         <div class="controls">
-            <input type="text" id="searchInput" placeholder="🔍 Поиск по названию..." />
+            <input type="text" id="searchInput" placeholder="Поиск..." />
             <button class="btn btn-primary" onclick="searchAddress()">Найти</button>
             <button class="btn btn-warning" onclick="clearSearch()">✕</button>
-            <button class="btn btn-success" onclick="loadData()">🔄</button>
-            <span class="stats" id="stats">Загрузка...</span>
+            <button class="btn btn-success" onclick="loadData()">⟳</button>
+            <span class="stats" id="stats"></span>
         </div>
     </div>
     
@@ -153,14 +141,12 @@
     
     <div class="updated-at" id="updatedAt"></div>
     
-    <!-- Кнопки переключения слоёв -->
     <div class="layer-control" id="layerControl">
-        <button class="active" data-layer="osm">🗺️ Схема</button>
-        <button data-layer="satellite">🛰️ Спутник</button>
-        <button data-layer="hybrid">🌍 Гибрид</button>
+        <button class="active" data-layer="osm">Схема</button>
+        <button data-layer="satellite">Спутник</button>
+        <button data-layer="hybrid">Гибрид</button>
     </div>
     
-    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <script>
@@ -169,6 +155,7 @@
     // ============================================================
     var map = null;
     var markerLayer = null;
+    var labelLayer = null;
     var allData = [];
     var tileLayers = {};
     var currentLayer = null;
@@ -178,7 +165,7 @@
     // ============================================================
     function loadData() {
         document.getElementById('loading').classList.remove('hidden');
-        document.getElementById('stats').textContent = '⏳...';
+        document.getElementById('stats').textContent = '...';
         
         fetch('data/addresses.json?t=' + Date.now())
             .then(function(response) {
@@ -191,7 +178,7 @@
                     return item.lat && item.lon;
                 });
                 
-                document.getElementById('stats').textContent = 'Всего: ' + allData.length;
+                document.getElementById('stats').textContent = allData.length;
                 document.getElementById('updateBadge').textContent = new Date(data.updated_at).toLocaleString('ru-RU');
                 document.getElementById('updatedAt').textContent = '🔄 ' + new Date(data.updated_at).toLocaleString('ru-RU');
                 
@@ -199,55 +186,68 @@
             })
             .catch(function(error) {
                 document.getElementById('loading').classList.add('hidden');
-                document.getElementById('stats').textContent = '❌ Ошибка';
-                document.getElementById('updateBadge').textContent = 'ошибка';
-                console.error('Ошибка:', error);
+                document.getElementById('stats').textContent = 'ошибка';
+                console.error(error);
             });
     }
     
     // ============================================================
-    // ОТРИСОВКА МАРКЕРОВ
+    // ОТРИСОВКА МАРКЕРОВ И НАЗВАНИЙ
     // ============================================================
     function renderMarkers() {
         if (!markerLayer) return;
         markerLayer.clearLayers();
+        if (labelLayer) labelLayer.clearLayers();
+        
         if (allData.length === 0) return;
+        
+        // Создаём слой для меток
+        labelLayer = L.layerGroup().addTo(map);
         
         for (var i = 0; i < allData.length; i++) {
             var item = allData[i];
             
-            // Простой маркер с номером
-            var iconHtml = '<div style="' +
-                'background: #1a73e8;' +
-                'width: 28px; height: 28px;' +
-                'border-radius: 50%;' +
-                'border: 3px solid white;' +
-                'box-shadow: 0 2px 6px rgba(0,0,0,0.3);' +
-                'display: flex; align-items: center; justify-content: center;' +
-                'font-size: 11px; color: white; font-weight: bold;' +
-                '">' + (i + 1) + '</div>';
-            
-            var icon = L.divIcon({
-                html: iconHtml,
+            // Точка на карте (маленькая, едва заметная)
+            var dotIcon = L.divIcon({
+                html: '<div style="' +
+                    'width: 6px; height: 6px;' +
+                    'background: #1a73e8;' +
+                    'border-radius: 50%;' +
+                    'border: 2px solid white;' +
+                    'box-shadow: 0 0 4px rgba(0,0,0,0.3);' +
+                    '"></div>',
                 className: '',
-                iconSize: [28, 28],
-                iconAnchor: [14, 14]
+                iconSize: [6, 6],
+                iconAnchor: [3, 3]
             });
             
-            var marker = L.marker([item.lat, item.lon], { icon: icon });
-            
-            // Попап с названием и адресом
-            var popupContent = '<div style="min-width: 150px;">' +
-                '<b>' + (item.title || 'Без названия') + '</b>' +
-                '<div class="address">' + (item.address_clean || item.address || '') + '</div>' +
-                '</div>';
-            
-            marker.bindPopup(popupContent, { 
-                maxWidth: 300,
-                className: 'custom-popup'
+            var marker = L.marker([item.lat, item.lon], { 
+                icon: dotIcon,
+                interactive: false
             });
-            marker._index = i;
             markerLayer.addLayer(marker);
+            
+            // Текстовое название (всегда видно)
+            var title = item.title || '';
+            if (title.length > 20) {
+                title = title.substring(0, 18) + '…';
+            }
+            
+            if (title) {
+                var labelIcon = L.divIcon({
+                    html: '<div class="label-marker">' + title + '</div>',
+                    className: '',
+                    iconSize: [0, 0],
+                    iconAnchor: [0, -10]
+                });
+                
+                var label = L.marker([item.lat, item.lon], {
+                    icon: labelIcon,
+                    interactive: false,
+                    keyboard: false
+                });
+                labelLayer.addLayer(label);
+            }
         }
         
         if (allData.length > 0) {
@@ -269,15 +269,12 @@
         markerLayer.eachLayer(function(marker) {
             var item = allData[marker._index];
             if (item) {
-                var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1) || 
-                           (item.address_clean && item.address_clean.toLowerCase().indexOf(query) !== -1) ||
-                           (item.address && item.address.toLowerCase().indexOf(query) !== -1);
+                var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1);
                 
                 if (match) {
                     markerLayer.addLayer(marker);
                     if (!found) {
-                        map.setView(marker.getLatLng(), 15);
-                        marker.openPopup();
+                        map.setView([item.lat, item.lon], 15);
                         found = true;
                     }
                 } else {
@@ -286,8 +283,22 @@
             }
         });
         
+        // Скрываем/показываем метки
+        labelLayer.eachLayer(function(label) {
+            var idx = label._index;
+            var item = allData[idx];
+            if (item) {
+                var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1);
+                if (match) {
+                    labelLayer.addLayer(label);
+                } else {
+                    labelLayer.removeLayer(label);
+                }
+            }
+        });
+        
         if (!found) {
-            alert('🔍 Ничего не найдено');
+            alert('Ничего не найдено');
             clearSearch();
         }
     }
@@ -301,6 +312,11 @@
                     markerLayer.addLayer(marker);
                 }
             });
+            labelLayer.eachLayer(function(label) {
+                if (label._index === i) {
+                    labelLayer.addLayer(label);
+                }
+            });
         }
         
         if (allData.length > 0) {
@@ -312,53 +328,38 @@
     }
     
     // ============================================================
-    // ПЕРЕКЛЮЧЕНИЕ СЛОЁВ КАРТЫ
+    // ПЕРЕКЛЮЧЕНИЕ СЛОЁВ
     // ============================================================
     function setupTileLayers() {
-        // Схема (OpenStreetMap)
         tileLayers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            attribution: '&copy; OpenStreetMap',
             maxZoom: 19
         });
         
-        // Спутник (ESRI)
         tileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; <a href="https://www.esri.com">ESRI</a>',
+            attribution: '&copy; ESRI',
             maxZoom: 19
         });
         
-        // Гибрид (спутник + подписи)
         tileLayers.hybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-            attribution: '&copy; <a href="https://www.google.com/maps">Google</a>',
+            attribution: '&copy; Google',
             maxZoom: 19,
             subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
         });
         
-        // Добавляем слой по умолчанию
         currentLayer = tileLayers.osm;
         currentLayer.addTo(map);
     }
     
     function switchLayer(layerName) {
         if (!tileLayers[layerName]) return;
-        
-        // Убираем текущий слой
-        if (currentLayer) {
-            map.removeLayer(currentLayer);
-        }
-        
-        // Добавляем новый
+        if (currentLayer) map.removeLayer(currentLayer);
         currentLayer = tileLayers[layerName];
         currentLayer.addTo(map);
         
-        // Обновляем активную кнопку
-        var buttons = document.querySelectorAll('#layerControl button');
-        for (var i = 0; i < buttons.length; i++) {
-            buttons[i].classList.remove('active');
-            if (buttons[i].dataset.layer === layerName) {
-                buttons[i].classList.add('active');
-            }
-        }
+        document.querySelectorAll('#layerControl button').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.layer === layerName);
+        });
     }
     
     // ============================================================
@@ -374,13 +375,10 @@
         });
     });
     
-    // Автообновление каждые 5 минут
-    setInterval(function() {
-        loadData();
-    }, 5 * 60 * 1000);
+    setInterval(loadData, 5 * 60 * 1000);
     
     // ============================================================
-    // ЗАПУСК КАРТЫ
+    // ЗАПУСК
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
         map = L.map('map', {
@@ -391,10 +389,7 @@
         
         L.control.zoom({ position: 'topleft' }).addTo(map);
         
-        // Настраиваем слои
         setupTileLayers();
-        
-        // Создаём слой для маркеров
         markerLayer = L.layerGroup().addTo(map);
         loadData();
     });
