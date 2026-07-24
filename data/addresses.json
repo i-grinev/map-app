@@ -4,917 +4,384 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Карта объектов</title>
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-    
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; height: 100vh; }
-        
-        .header {
-            background: white;
-            padding: 8px 16px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
-            z-index: 1000;
-            position: relative;
-        }
-        .header h1 { font-size: 16px; color: #1a73e8; }
-        .header h1 .badge { font-size: 10px; background: #e8eaed; color: #5f6368; padding: 2px 8px; border-radius: 12px; font-weight: normal; margin-left: 8px; }
-        
-        .controls { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
-        .controls input { padding: 5px 10px; border: 1px solid #dadce0; border-radius: 6px; font-size: 12px; min-width: 130px; outline: none; }
-        .controls input:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
-        
-        .btn { padding: 5px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
-        .btn-primary { background: #1a73e8; color: white; }
-        .btn-primary:hover { background: #1557b0; }
-        .btn-warning { background: #fbbc04; color: #333; }
-        .btn-warning:hover { background: #e5ac00; }
-        .btn-success { background: #34a853; color: white; }
-        .btn-success:hover { background: #2d9248; }
-        
-        .stats { font-size: 11px; color: #5f6368; padding: 3px 8px; background: #f1f3f4; border-radius: 4px; }
-        #map { height: calc(100vh - 52px); width: 100%; }
-        
-        .loading-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(255,255,255,0.85);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 3000;
-        }
-        .loading-overlay.hidden { display: none; }
-        
-        .loading-box { background: white; padding: 20px 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); text-align: center; }
-        .spinner { width: 28px; height: 28px; border: 3px solid #e8eaed; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-box p { color: #5f6368; font-size: 12px; }
-        
-        .updated-at {
-            position: fixed;
-            bottom: 12px;
-            left: 12px;
-            font-size: 9px;
-            color: #999;
-            background: rgba(255,255,255,0.9);
-            padding: 2px 10px;
-            border-radius: 12px;
-            z-index: 1000;
-        }
-        
-        .layer-control {
-            position: fixed;
-            bottom: 12px;
-            right: 12px;
-            background: white;
-            padding: 5px 8px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-            z-index: 1000;
-            display: flex;
-            gap: 3px;
-            flex-wrap: wrap;
-        }
-        .layer-control button {
-            padding: 3px 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
-            font-size: 10px;
-            transition: all 0.2s;
-        }
-        .layer-control button:hover { background: #f0f0f0; }
-        .layer-control button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
-        
-        /* ============================================================
-           ФИЛЬТРЫ В ПРАВОМ ВЕРХНЕМ УГЛУ
-           ============================================================ */
-        .filters {
-            position: fixed;
-            top: 70px;
-            right: 16px;
-            background: white;
-            padding: 14px 18px;
-            border-radius: 10px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-            z-index: 1000;
-            min-width: 180px;
-            font-size: 12px;
-        }
-        .filters h4 {
-            font-size: 13px;
-            color: #202124;
-            margin-bottom: 10px;
-            border-bottom: 1px solid #e8eaed;
-            padding-bottom: 6px;
-        }
-        .filters .filter-group {
-            margin-bottom: 10px;
-        }
-        .filters .filter-group label {
-            display: block;
-            margin-bottom: 4px;
-            color: #5f6368;
-            font-weight: 500;
-            font-size: 11px;
-        }
-        .filters select {
-            width: 100%;
-            padding: 4px 8px;
-            border: 1px solid #dadce0;
-            border-radius: 6px;
-            font-size: 12px;
-            outline: none;
-            background: white;
-        }
-        .filters select:focus {
-            border-color: #1a73e8;
-            box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
-        }
-        .filters .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 0;
-            cursor: pointer;
-        }
-        .filters .checkbox-group input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-            accent-color: #1a73e8;
-        }
-        .filters .checkbox-group label {
-            cursor: pointer;
-            color: #333;
-            font-size: 12px;
-        }
-        .filters .filter-stats {
-            font-size: 10px;
-            color: #999;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid #e8eaed;
-            text-align: center;
-        }
-        .filters .filter-stats span {
-            font-weight: 600;
-            color: #1a73e8;
-        }
-        
-        /* ============================================================
-           СТИЛИ ДЛЯ КАСТОМНЫХ МАРКЕРОВ
-           ============================================================ */
-        
-        .custom-marker {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
-            transition: transform 0.15s;
-            position: relative;
-        }
-        .custom-marker:hover {
-            transform: scale(1.08);
-        }
-        
-        .marker-dot {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 1px 6px rgba(0,0,0,0.35);
-            flex-shrink: 0;
-            transition: all 0.2s;
-        }
-        .marker-dot.large {
-            width: 20px;
-            height: 20px;
-        }
-        
-        .marker-label {
-            background: rgba(26, 115, 232, 0.9);
-            color: white;
-            padding: 3px 12px;
-            border-radius: 14px;
-            font-size: 12px;
-            font-weight: 500;
-            white-space: nowrap;
-            box-shadow: 0 1px 6px rgba(0,0,0,0.2);
-            border: 1px solid rgba(255,255,255,0.3);
-            backdrop-filter: blur(2px);
-            transition: all 0.2s;
-            pointer-events: none;
-        }
-        
-        .custom-marker:hover .marker-label {
-            background: rgba(26, 115, 232, 1);
-            box-shadow: 0 2px 10px rgba(26,115,232,0.4);
-        }
-        
-        /* Цвета для стадий (по частичному совпадению) */
-        .marker-dot.stage-main { background: #FF6B6B; }
-        .marker-dot.stage-new { background: #96CEB4; }
-        .marker-dot.stage-long { background: #FFEAA7; }
-        .marker-dot.stage-default { background: #A8A8A8; }
-        
-        .marker-label.stage-main { background: rgba(255,107,107,0.9); }
-        .marker-label.stage-new { background: rgba(150,206,180,0.9); }
-        .marker-label.stage-long { background: rgba(255,234,167,0.9); color: #333; }
-        .marker-label.stage-default { background: rgba(168,168,168,0.9); }
-        
-        .custom-marker:hover .marker-label.stage-main { background: rgba(255,107,107,1); }
-        .custom-marker:hover .marker-label.stage-new { background: rgba(150,206,180,1); }
-        .custom-marker:hover .marker-label.stage-long { background: rgba(255,234,167,1); }
-        .custom-marker:hover .marker-label.stage-default { background: rgba(168,168,168,1); }
-        
-        .marker-tooltip-list {
-            display: none;
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.92);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 11px;
-            min-width: 160px;
-            max-width: 320px;
-            pointer-events: none;
-            margin-bottom: 8px;
-            z-index: 1000;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-        }
-        .marker-tooltip-list::after {
-            content: '';
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            border: 5px solid transparent;
-            border-top-color: rgba(0,0,0,0.92);
-        }
-        .marker-tooltip-list .tt-title {
-            font-weight: 600;
-            font-size: 12px;
-            margin-bottom: 4px;
-            color: #8ab4f8;
-        }
-        .marker-tooltip-list .tt-item {
-            padding: 2px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            font-size: 11px;
-        }
-        .marker-tooltip-list .tt-item:last-child {
-            border-bottom: none;
-        }
-        .marker-tooltip-list .tt-item .tt-address {
-            color: #aaa;
-            font-size: 10px;
-        }
-        
-        .custom-marker:hover .marker-tooltip-list {
-            display: block;
-        }
-        
-        .cluster-marker {
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            border: 2px solid white;
-            cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
-        }
-        .cluster-marker:hover {
-            transform: scale(1.1);
-        }
-        
-        .cluster-marker.small { width: 32px; height: 32px; font-size: 12px; background: #1a73e8; }
-        .cluster-marker.medium { width: 42px; height: 42px; font-size: 15px; background: #1557b0; }
-        .cluster-marker.large { width: 52px; height: 52px; font-size: 18px; background: #0d47a1; }
-        
-        .cluster-popup .leaflet-popup-content-wrapper {
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-            max-height: 350px;
-        }
-        .cluster-popup .leaflet-popup-content {
-            font-size: 13px;
-            max-height: 320px;
-            overflow-y: auto;
-            min-width: 220px;
-            padding-right: 4px;
-        }
-        .cluster-popup .leaflet-popup-content .popup-item {
-            padding: 6px 8px;
-            border-bottom: 1px solid #e8eaed;
-            cursor: pointer;
-            border-radius: 4px;
-            transition: background 0.15s;
-        }
-        .cluster-popup .leaflet-popup-content .popup-item:last-child {
-            border-bottom: none;
-        }
-        .cluster-popup .leaflet-popup-content .popup-item:hover {
-            background: #f1f3f4;
-        }
-        .cluster-popup .leaflet-popup-content .popup-title {
-            font-weight: 600;
-            color: #1a73e8;
-            font-size: 13px;
-        }
-        .cluster-popup .leaflet-popup-content .popup-address {
-            color: #5f6368;
-            font-size: 11px;
-            margin-top: 2px;
-        }
-        .cluster-popup .leaflet-popup-content .popup-stage {
-            font-size: 10px;
-            color: #999;
-            display: inline-block;
-            padding: 1px 8px;
-            border-radius: 10px;
-            margin-top: 2px;
-        }
-        .cluster-popup .leaflet-popup-content .popup-click-hint {
-            color: #999;
-            font-size: 11px;
-            font-style: italic;
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid #e8eaed;
-            text-align: center;
-        }
-        
-        @media (max-width: 768px) {
-            .header { flex-direction: column; align-items: stretch; gap: 4px; }
-            .controls { justify-content: stretch; }
-            .controls input { min-width: unset; width: 100%; }
-            .layer-control { bottom: 8px; right: 8px; left: 8px; justify-content: center; }
-            .filters {
-                top: 100px;
-                right: 8px;
-                left: 8px;
-                min-width: unset;
-                padding: 10px 14px;
-            }
-            .marker-label { font-size: 10px; padding: 2px 8px; }
-            .marker-dot { width: 14px; height: 14px; }
-            .marker-dot.large { width: 18px; height: 18px; }
-            .cluster-marker.small { width: 28px; height: 28px; font-size: 11px; }
-            .cluster-marker.medium { width: 36px; height: 36px; font-size: 13px; }
-            .cluster-marker.large { width: 44px; height: 44px; font-size: 15px; }
-        }
+        *{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;height:100vh}
+        .header{background:#fff;padding:8px 16px;box-shadow:0 2px 8px rgba(0,0,0,.1);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;z-index:1000;position:relative}
+        .header h1{font-size:16px;color:#1a73e8}.header h1 .badge{font-size:10px;background:#e8eaed;color:#5f6368;padding:2px 8px;border-radius:12px;font-weight:400;margin-left:8px}
+        .controls{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+        .controls input{padding:5px 10px;border:1px solid #dadce0;border-radius:6px;font-size:12px;min-width:130px;outline:none}
+        .controls input:focus{border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,115,232,.2)}
+        .btn{padding:5px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;transition:all .2s}
+        .btn-primary{background:#1a73e8;color:#fff}.btn-primary:hover{background:#1557b0}
+        .btn-warning{background:#fbbc04;color:#333}.btn-warning:hover{background:#e5ac00}
+        .btn-success{background:#34a853;color:#fff}.btn-success:hover{background:#2d9248}
+        .stats{font-size:11px;color:#5f6368;padding:3px 8px;background:#f1f3f4;border-radius:4px}
+        #map{height:calc(100vh - 52px);width:100%}
+        .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.85);display:flex;justify-content:center;align-items:center;z-index:3000}
+        .loading-overlay.hidden{display:none}
+        .loading-box{background:#fff;padding:20px 30px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.15);text-align:center}
+        .spinner{width:28px;height:28px;border:3px solid #e8eaed;border-top-color:#1a73e8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .loading-box p{color:#5f6368;font-size:12px}
+        .updated-at{position:fixed;bottom:12px;left:12px;font-size:9px;color:#999;background:rgba(255,255,255,.9);padding:2px 10px;border-radius:12px;z-index:1000}
+        .layer-control{position:fixed;bottom:12px;right:12px;background:#fff;padding:5px 8px;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.15);z-index:1000;display:flex;gap:3px;flex-wrap:wrap}
+        .layer-control button{padding:3px 10px;border:1px solid #ddd;border-radius:4px;background:#fff;cursor:pointer;font-size:10px;transition:all .2s}
+        .layer-control button:hover{background:#f0f0f0}
+        .layer-control button.active{background:#1a73e8;color:#fff;border-color:#1a73e8}
+        .filters{position:fixed;top:70px;right:16px;background:#fff;padding:14px 18px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);z-index:1000;min-width:180px;font-size:12px}
+        .filters h4{font-size:13px;color:#202124;margin-bottom:10px;border-bottom:1px solid #e8eaed;padding-bottom:6px}
+        .filters .filter-group{margin-bottom:10px}
+        .filters .filter-group label{display:block;margin-bottom:4px;color:#5f6368;font-weight:500;font-size:11px}
+        .filters select{width:100%;padding:4px 8px;border:1px solid #dadce0;border-radius:6px;font-size:12px;outline:none;background:#fff}
+        .filters select:focus{border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,115,232,.2)}
+        .filters .checkbox-group{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer}
+        .filters .checkbox-group input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:#1a73e8}
+        .filters .checkbox-group label{cursor:pointer;color:#333;font-size:12px}
+        .filters .filter-stats{font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #e8eaed;text-align:center}
+        .filters .filter-stats span{font-weight:600;color:#1a73e8}
+        .custom-marker{display:flex;align-items:center;gap:6px;cursor:pointer;transition:transform .15s;position:relative}
+        .custom-marker:hover{transform:scale(1.08)}
+        .marker-dot{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35);flex-shrink:0;transition:all .2s}
+        .marker-dot.large{width:20px;height:20px}
+        .marker-label{background:rgba(26,115,232,.9);color:#fff;padding:3px 12px;border-radius:14px;font-size:12px;font-weight:500;white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,.2);border:1px solid rgba(255,255,255,.3);backdrop-filter:blur(2px);transition:all .2s;pointer-events:none}
+        .custom-marker:hover .marker-label{background:#1a73e8;box-shadow:0 2px 10px rgba(26,115,232,.4)}
+        .marker-dot.stage-main,.marker-label.stage-main{background:#FF6B6B}
+        .marker-dot.stage-new,.marker-label.stage-new{background:#96CEB4}
+        .marker-dot.stage-long,.marker-label.stage-long{background:#FFEAA7;color:#333}
+        .marker-dot.stage-default,.marker-label.stage-default{background:#A8A8A8}
+        .marker-tooltip-list{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.92);color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;min-width:160px;max-width:320px;pointer-events:none;margin-bottom:8px;z-index:1000;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+        .marker-tooltip-list::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(0,0,0,.92)}
+        .marker-tooltip-list .tt-title{font-weight:600;font-size:12px;margin-bottom:4px;color:#8ab4f8}
+        .marker-tooltip-list .tt-item{padding:2px 0;border-bottom:1px solid rgba(255,255,255,.1);font-size:11px}
+        .marker-tooltip-list .tt-item:last-child{border-bottom:none}
+        .marker-tooltip-list .tt-item .tt-address{color:#aaa;font-size:10px}
+        .custom-marker:hover .marker-tooltip-list{display:block}
+        .cluster-marker{color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.3);border:2px solid #fff;cursor:pointer;transition:all .2s;position:relative}
+        .cluster-marker:hover{transform:scale(1.1)}
+        .cluster-marker.small{width:32px;height:32px;font-size:12px;background:#1a73e8}
+        .cluster-marker.medium{width:42px;height:42px;font-size:15px;background:#1557b0}
+        .cluster-marker.large{width:52px;height:52px;font-size:18px;background:#0d47a1}
+        .cluster-popup .leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.2);max-height:350px}
+        .cluster-popup .leaflet-popup-content{font-size:13px;max-height:320px;overflow-y:auto;min-width:220px;padding-right:4px}
+        .cluster-popup .leaflet-popup-content .popup-item{padding:6px 8px;border-bottom:1px solid #e8eaed;cursor:pointer;border-radius:4px;transition:background .15s}
+        .cluster-popup .leaflet-popup-content .popup-item:last-child{border-bottom:none}
+        .cluster-popup .leaflet-popup-content .popup-item:hover{background:#f1f3f4}
+        .cluster-popup .leaflet-popup-content .popup-title{font-weight:600;color:#1a73e8;font-size:13px}
+        .cluster-popup .leaflet-popup-content .popup-address{color:#5f6368;font-size:11px;margin-top:2px}
+        .cluster-popup .leaflet-popup-content .popup-stage{font-size:10px;color:#999;display:inline-block;padding:1px 8px;border-radius:10px;margin-top:2px}
+        .cluster-popup .leaflet-popup-content .popup-click-hint{color:#999;font-size:11px;font-style:italic;margin-top:8px;padding-top:8px;border-top:1px solid #e8eaed;text-align:center}
+        @media(max-width:768px){.header{flex-direction:column;align-items:stretch;gap:4px}.controls{justify-content:stretch}.controls input{min-width:unset;width:100%}.layer-control{bottom:8px;right:8px;left:8px;justify-content:center}.filters{top:100px;right:8px;left:8px;min-width:unset;padding:10px 14px}.marker-label{font-size:10px;padding:2px 8px}.marker-dot{width:14px;height:14px}.marker-dot.large{width:18px;height:18px}.cluster-marker.small{width:28px;height:28px;font-size:11px}.cluster-marker.medium{width:36px;height:36px;font-size:13px}.cluster-marker.large{width:44px;height:44px;font-size:15px}}
     </style>
 </head>
 <body>
-    
-    <div class="loading-overlay" id="loading">
-        <div class="loading-box">
-            <div class="spinner"></div>
-            <p>Загрузка...</p>
-        </div>
+
+<div class="loading-overlay" id="loading"><div class="loading-box"><div class="spinner"></div><p>Загрузка...</p></div></div>
+
+<div class="header">
+    <h1>📍 <span id="pageTitle">Карта</span> <span class="badge" id="updateBadge"></span></h1>
+    <div class="controls">
+        <input type="text" id="searchInput" placeholder="Поиск..." />
+        <button class="btn btn-primary" onclick="searchAddress()">Найти</button>
+        <button class="btn btn-warning" onclick="clearSearch()">✕</button>
+        <button class="btn btn-success" onclick="loadData()">⟳</button>
+        <span class="stats" id="stats"></span>
     </div>
-    
-    <div class="header">
-        <h1>📍 <span id="pageTitle">Карта</span> <span class="badge" id="updateBadge"></span></h1>
-        <div class="controls">
-            <input type="text" id="searchInput" placeholder="Поиск..." />
-            <button class="btn btn-primary" onclick="searchAddress()">Найти</button>
-            <button class="btn btn-warning" onclick="clearSearch()">✕</button>
-            <button class="btn btn-success" onclick="loadData()">⟳</button>
-            <span class="stats" id="stats"></span>
-        </div>
+</div>
+
+<div id="map"></div>
+
+<div class="filters">
+    <h4>🔍 Фильтры</h4>
+    <div class="filter-group">
+        <label for="cityFilter">🌆 Город</label>
+        <select id="cityFilter" onchange="applyFilters()"><option value="all">Все города</option></select>
     </div>
-    
-    <div id="map"></div>
-    
-    <!-- ФИЛЬТРЫ -->
-    <div class="filters" id="filters">
-        <h4>🔍 Фильтры</h4>
-        
-        <div class="filter-group">
-            <label for="cityFilter">🌆 Город</label>
-            <select id="cityFilter" onchange="applyFilters()">
-                <option value="all">Все города</option>
-            </select>
-        </div>
-        
-        <div class="filter-group">
-            <label>📌 Стадии</label>
-            <div class="checkbox-group">
-                <input type="checkbox" id="stageCheck" checked onchange="applyFilters()" />
-                <label for="stageCheck">Основные (UC_WXDLF4, NEW)</label>
-            </div>
-            <div class="checkbox-group">
-                <input type="checkbox" id="longTermCheck" onchange="applyFilters()" />
-                <label for="longTermCheck">🕐 Длительная (UC_LJBX0Q)</label>
-            </div>
-        </div>
-        
-        <div class="filter-stats">
-            Показано: <span id="filteredCount">0</span> из <span id="totalCount">0</span>
-        </div>
+    <div class="filter-group">
+        <label>📌 Стадии</label>
+        <div class="checkbox-group"><input type="checkbox" id="stageCheck" checked onchange="applyFilters()" /><label for="stageCheck">Основные (UC_WXDLF4, NEW)</label></div>
+        <div class="checkbox-group"><input type="checkbox" id="longTermCheck" onchange="applyFilters()" /><label for="longTermCheck">🕐 Длительная (UC_LJBX0Q)</label></div>
     </div>
-    
-    <div class="updated-at" id="updatedAt"></div>
-    
-    <div class="layer-control" id="layerControl">
-        <button class="active" data-layer="osm">Схема</button>
-        <button data-layer="satellite">Спутник</button>
-        <button data-layer="hybrid">Гибрид</button>
-    </div>
-    
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-    
-    <script>
-    // ============================================================
-    // ПЕРЕМЕННЫЕ
-    // ============================================================
-    var map = null;
-    var clusterGroup = null;
-    var allData = [];
-    var filteredData = [];
-    var tileLayers = {};
-    var currentLayer = null;
-    
-    // ============================================================
-    // ФУНКЦИЯ ДЛЯ ИЗВЛЕЧЕНИЯ СТАДИИ ИЗ ПОЛНОГО ID
-    // ============================================================
-    function getStageShort(stageId) {
-        if (!stageId) return 'default';
-        // Ищем часть после последнего двоеточия
-        var parts = stageId.split(':');
-        var lastPart = parts[parts.length - 1];
-        return lastPart || 'default';
-    }
-    
-    // ============================================================
-    // КОНСТАНТЫ СТАДИЙ (в коротком формате)
-    // ============================================================
-    var STAGES = {
-        MAIN: ['UC_WXDLF4', 'NEW'],
-        LONG_TERM: ['UC_LJBX0Q']
-    };
-    
-    // ============================================================
-    // ЗАГРУЗКА ДАННЫХ
-    // ============================================================
-    function loadData() {
-        document.getElementById('loading').classList.remove('hidden');
-        document.getElementById('stats').textContent = '...';
-        
-        fetch('data/addresses.json?t=' + Date.now())
-            .then(function(response) {
-                if (!response.ok) throw new Error('Файл не найден');
-                return response.json();
-            })
-            .then(function(data) {
-                document.getElementById('loading').classList.add('hidden');
-                allData = data.items.filter(function(item) {
-                    return item.lat && item.lon;
-                });
-                
-                document.getElementById('stats').textContent = allData.length;
-                document.getElementById('totalCount').textContent = allData.length;
-                document.getElementById('updateBadge').textContent = new Date(data.updated_at).toLocaleString('ru-RU');
-                document.getElementById('updatedAt').textContent = '🔄 ' + new Date(data.updated_at).toLocaleString('ru-RU');
-                
-                populateCityFilter();
-                applyFilters();
-            })
-            .catch(function(error) {
-                document.getElementById('loading').classList.add('hidden');
-                document.getElementById('stats').textContent = 'ошибка';
-                console.error(error);
-            });
-    }
-    
-    // ============================================================
-    // ЗАПОЛНЕНИЕ ФИЛЬТРА ГОРОДОВ
-    // ============================================================
-    function populateCityFilter() {
-        var cities = {};
-        for (var i = 0; i < allData.length; i++) {
-            var addr = allData[i].address_clean || allData[i].address || '';
-            var city = extractCity(addr);
-            if (city) {
-                cities[city] = (cities[city] || 0) + 1;
-            }
-        }
-        
-        var select = document.getElementById('cityFilter');
-        select.innerHTML = '<option value="all">Все города</option>';
-        
-        var cityNames = Object.keys(cities).sort();
-        for (var i = 0; i < cityNames.length; i++) {
-            var option = document.createElement('option');
-            option.value = cityNames[i];
-            option.textContent = cityNames[i] + ' (' + cities[cityNames[i]] + ')';
-            select.appendChild(option);
-        }
-    }
-    
-    function extractCity(address) {
-        if (!address) return null;
-        var cities = ['Москва', 'Краснодар', 'Санкт-Петербург', 'Ялта', 'Мытищи', 
-                      'Видное', 'Люберцы', 'Химки', 'Долгопрудный', 'Ступино', 
-                      'Котельники', 'Красногорск', 'Казань', 'Сочи', 'Екатеринбург',
-                      'Новосибирск', 'Республика Дагестан', 'Адыгея'];
-        for (var i = 0; i < cities.length; i++) {
-            if (address.indexOf(cities[i]) !== -1) {
-                return cities[i];
-            }
-        }
-        return null;
-    }
-    
-    // ============================================================
-    // ПРИМЕНЕНИЕ ФИЛЬТРОВ (исправлено!)
-    // ============================================================
-    function applyFilters() {
-        var city = document.getElementById('cityFilter').value;
-        var showMain = document.getElementById('stageCheck').checked;
-        var showLongTerm = document.getElementById('longTermCheck').checked;
-        
-        filteredData = allData.filter(function(item) {
-            // Фильтр по городу
-            if (city !== 'all') {
-                var addr = item.address_clean || item.address || '';
-                if (addr.indexOf(city) === -1) return false;
-            }
-            
-            // Фильтр по стадиям (используем getStageShort)
-            var stageFull = item.stage_id || '';
-            var stageShort = getStageShort(stageFull);
-            
-            var inMain = STAGES.MAIN.indexOf(stageShort) !== -1;
-            var inLongTerm = STAGES.LONG_TERM.indexOf(stageShort) !== -1;
-            
-            // Если включены основные и длительная
-            if (showMain && showLongTerm) {
-                return inMain || inLongTerm;
-            }
-            // Если только основные
-            if (showMain) {
-                return inMain;
-            }
-            // Если только длительная
-            if (showLongTerm) {
-                return inLongTerm;
-            }
-            // Если ничего не выбрано — показываем всё
-            return true;
-        });
-        
-        document.getElementById('filteredCount').textContent = filteredData.length;
-        renderMarkers();
-    }
-    
-    // ============================================================
-    // ВСПОМОГАТЕЛЬНАЯ ДЛЯ ЧЕКБОКСОВ
-    // ============================================================
-    function toggleCheckbox(id) {
-        var cb = document.getElementById(id);
-        cb.checked = !cb.checked;
-        applyFilters();
-    }
-    
-    // ============================================================
-    // СОЗДАНИЕ МАРКЕРА ДЛЯ ОДНОГО ОБЪЕКТА
-    // ============================================================
-    function createMarker(item, index) {
-        var title = item.title || '';
-        var address = item.address_clean || item.address || '';
-        var stageFull = item.stage_id || 'default';
-        var stageShort = getStageShort(stageFull);
-        
-        var displayTitle = title;
-        if (displayTitle.length > 30) {
-            displayTitle = displayTitle.substring(0, 28) + '…';
-        }
-        
-        // Определяем класс стадии для цвета
-        var stageClass = 'stage-default';
-        if (STAGES.MAIN.indexOf(stageShort) !== -1) {
-            stageClass = 'stage-main';
-        } else if (STAGES.LONG_TERM.indexOf(stageShort) !== -1) {
-            stageClass = 'stage-long';
-        }
-        
-        var html = '<div class="custom-marker" data-index="' + index + '">' +
-            '<div class="marker-dot large ' + stageClass + '"></div>' +
-            '<span class="marker-label ' + stageClass + '">' + displayTitle + '</span>' +
-            '<div class="marker-tooltip-list">' +
-            '<div class="tt-title">' + title + '</div>' +
-            '<div class="tt-item"><span class="tt-address">' + address + '</span></div>' +
-            '</div>' +
-            '</div>';
-        
-        var icon = L.divIcon({
-            html: html,
-            className: '',
-            iconSize: [0, 0],
-            iconAnchor: [0, -10]
-        });
-        
-        var marker = L.marker([item.lat, item.lon], {
-            icon: icon,
-            interactive: true,
-            keyboard: false
-        });
-        
-        marker._index = index;
-        
-        marker.on('click', function(e) {
-            var idx = e.target._index;
-            var item = filteredData[idx];
-            if (item) {
-                map.setView([item.lat, item.lon], 17, {
-                    animate: true,
-                    duration: 0.5
-                });
-            }
-        });
-        
-        return marker;
-    }
-    
-    // ============================================================
-    // СОЗДАНИЕ КЛАСТЕРА
-    // ============================================================
-    function createClusterIcon(cluster) {
-        var count = cluster.getChildCount();
-        
-        var sizeClass = 'small';
-        if (count > 10) sizeClass = 'medium';
-        if (count > 30) sizeClass = 'large';
-        
-        var markers = cluster.getAllChildMarkers();
-        var items = markers.map(function(m) {
-            return filteredData[m._index];
-        }).filter(function(i) { return i; });
-        
-        var titles = items.map(function(i) { return i.title || 'Без названия'; });
-        var tooltipText = titles.join(', ');
-        if (tooltipText.length > 50) {
-            tooltipText = tooltipText.substring(0, 47) + '…';
-        }
-        
-        var html = '<div class="cluster-marker ' + sizeClass + '" title="' + tooltipText + '">' + count + '</div>';
-        
-        return L.divIcon({
-            html: html,
-            className: '',
-            iconSize: [0, 0],
-            iconAnchor: [0, 0]
-        });
-    }
-    
-    // ============================================================
-    // СОЗДАНИЕ ПОПАПА ДЛЯ КЛАСТЕРА
-    // ============================================================
-    function createClusterPopup(cluster) {
-        var markers = cluster.getAllChildMarkers();
-        var items = markers.map(function(m) {
-            return filteredData[m._index];
-        }).filter(function(i) { return i; });
-        
-        var html = '<div style="max-height: 320px; overflow-y: auto; min-width: 220px;">';
-        
-        for (var i = 0; i < items.length; i++) {
-            var item = items[i];
-            var stageFull = item.stage_id || '';
-            var stageShort = getStageShort(stageFull);
-            var stageLabel = stageShort || 'без стадии';
-            var bgColor = STAGES.MAIN.indexOf(stageShort) !== -1 ? '#FF6B6B' :
-                          STAGES.LONG_TERM.indexOf(stageShort) !== -1 ? '#FFEAA7' : '#A8A8A8';
-            
-            html += '<div class="popup-item" onclick="zoomToObject(' + item.lat + ',' + item.lon + ')">' +
-                '<div class="popup-title">' + (item.title || 'Без названия') + '</div>' +
-                '<div class="popup-address">' + (item.address_clean || item.address || '') + '</div>' +
-                '<div class="popup-stage" style="background:' + bgColor + '20;color:' + bgColor + ';">' + stageLabel + '</div>' +
-                '</div>';
-        }
-        
-        html += '<div class="popup-click-hint">👆 Кликните по объекту для приближения</div>';
-        html += '</div>';
-        
-        return html;
-    }
-    
-    // ============================================================
-    // МАСШТАБИРОВАНИЕ К ОБЪЕКТУ
-    // ============================================================
-    function zoomToObject(lat, lon) {
-        map.setView([lat, lon], 17, {
-            animate: true,
-            duration: 0.5
-        });
-        map.closePopup();
-    }
-    
-    // ============================================================
-    // ОТРИСОВКА ВСЕХ МАРКЕРОВ
-    // ============================================================
-    function renderMarkers() {
-        if (clusterGroup) {
-            map.removeLayer(clusterGroup);
-        }
-        
-        if (filteredData.length === 0) {
-            clusterGroup = L.markerClusterGroup();
-            map.addLayer(clusterGroup);
-            return;
-        }
-        
-        clusterGroup = L.markerClusterGroup({
-            iconCreateFunction: createClusterIcon,
-            spiderfyOnMaxZoom: true,
-            showCoverageOnHover: false,
-            zoomToBoundsOnClick: true,
-            maxClusterRadius: 60,
-            polygonOptions: {
-                weight: 0,
-                color: 'transparent'
-            }
-        });
-        
-        clusterGroup.on('clustermouseover', function(e) {
-            var cluster = e.layer;
-            var popupContent = createClusterPopup(cluster);
-            cluster.bindPopup(popupContent, {
-                className: 'cluster-popup',
-                maxWidth: 360,
-                minWidth: 220
-            });
-            cluster.openPopup();
-        });
-        
-        clusterGroup.on('clustermouseout', function(e) {
-            e.layer.closePopup();
-        });
-        
-        for (var i = 0; i < filteredData.length; i++) {
-            var marker = createMarker(filteredData[i], i);
-            clusterGroup.addLayer(marker);
-        }
-        
-        map.addLayer(clusterGroup);
-        
-        if (filteredData.length > 0) {
-            var bounds = clusterGroup.getBounds();
-            if (bounds.isValid()) {
-                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-            }
-        }
-    }
-    
-    // ============================================================
-    // ПОИСК
-    // ============================================================
-    function searchAddress() {
-        var query = document.getElementById('searchInput').value.trim().toLowerCase();
-        if (!query) return;
-        
-        var foundItems = [];
-        for (var i = 0; i < filteredData.length; i++) {
-            var item = filteredData[i];
-            var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1);
-            if (match) {
-                foundItems.push(item);
-            }
-        }
-        
-        if (foundItems.length === 0) {
-            alert('Ничего не найдено');
-            clearSearch();
-            return;
-        }
-        
-        if (foundItems.length === 1) {
-            map.setView([foundItems[0].lat, foundItems[0].lon], 17, {
-                animate: true,
-                duration: 0.5
-            });
-            return;
-        }
-        
-        var html = '<div style="max-height: 250px; overflow-y: auto; min-width: 200px;">' +
-            '<div style="font-weight: 600; margin-bottom: 8px;">Найдено: ' + foundItems.length + '</div>';
-        for (var i = 0; i < foundItems.length; i++) {
-            var item = foundItems[i];
-            html += '<div class="popup-item" onclick="zoomToObject(' + item.lat + ',' + item.lon + ')">' +
-                '<div class="popup-title">' + (item.title || 'Без названия') + '</div>' +
-                '<div class="popup-address">' + (item.address_clean || item.address || '') + '</div>' +
-                '</div>';
-        }
-        html += '<div class="popup-click-hint">👆 Кликните для приближения</div>';
-        html += '</div>';
-        
-        var popup = L.popup({
-            className: 'cluster-popup',
-            maxWidth: 320,
-            minWidth: 200
+    <div class="filter-stats">Показано: <span id="filteredCount">0</span> из <span id="totalCount">0</span></div>
+</div>
+
+<div class="updated-at" id="updatedAt"></div>
+
+<div class="layer-control" id="layerControl">
+    <button class="active" data-layer="osm">Схема</button>
+    <button data-layer="satellite">Спутник</button>
+    <button data-layer="hybrid">Гибрид</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script>
+// ============================================================
+// КОНФИГУРАЦИЯ
+// ============================================================
+var STAGES_MAIN = ['UC_WXDLF4', 'NEW'];
+var STAGES_LONG = ['UC_LJBX0Q'];
+
+var map, clusterGroup, allData = [], filteredData = [], tileLayers = {}, currentLayer;
+
+function getStageShort(id) {
+    if (!id) return 'default';
+    var parts = id.split(':');
+    return parts[parts.length - 1] || 'default';
+}
+
+// ============================================================
+// ЗАГРУЗКА ДАННЫХ
+// ============================================================
+function loadData() {
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('stats').textContent = '...';
+    fetch('data/addresses.json?t=' + Date.now())
+        .then(function(r) { if (!r.ok) throw new Error('Файл не найден'); return r.json(); })
+        .then(function(data) {
+            document.getElementById('loading').classList.add('hidden');
+            allData = data.items.filter(function(i) { return i.lat && i.lon; });
+            document.getElementById('stats').textContent = allData.length;
+            document.getElementById('totalCount').textContent = allData.length;
+            document.getElementById('updateBadge').textContent = new Date(data.updated_at).toLocaleString('ru-RU');
+            document.getElementById('updatedAt').textContent = '🔄 ' + new Date(data.updated_at).toLocaleString('ru-RU');
+            populateCities();
+            applyFilters();
         })
-        .setLatLng([foundItems[0].lat, foundItems[0].lon])
+        .catch(function(e) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('stats').textContent = 'ошибка';
+            console.error(e);
+        });
+}
+
+// ============================================================
+// ГОРОДА
+// ============================================================
+function populateCities() {
+    var cities = {};
+    for (var i = 0; i < allData.length; i++) {
+        var addr = allData[i].address_clean || allData[i].address || '';
+        var city = extractCity(addr);
+        if (city) cities[city] = (cities[city] || 0) + 1;
+    }
+    var sel = document.getElementById('cityFilter');
+    sel.innerHTML = '<option value="all">Все города</option>';
+    Object.keys(cities).sort().forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c + ' (' + cities[c] + ')';
+        sel.appendChild(opt);
+    });
+}
+
+function extractCity(addr) {
+    if (!addr) return null;
+    var list = ['Москва','Краснодар','Санкт-Петербург','Ялта','Мытищи','Видное','Люберцы','Химки','Долгопрудный','Ступино','Котельники','Красногорск','Казань','Сочи','Екатеринбург','Новосибирск','Республика Дагестан','Адыгея'];
+    for (var i = 0; i < list.length; i++) {
+        if (addr.indexOf(list[i]) !== -1) return list[i];
+    }
+    return null;
+}
+
+// ============================================================
+// ФИЛЬТРЫ
+// ============================================================
+function applyFilters() {
+    var city = document.getElementById('cityFilter').value;
+    var showMain = document.getElementById('stageCheck').checked;
+    var showLong = document.getElementById('longTermCheck').checked;
+
+    filteredData = allData.filter(function(item) {
+        if (city !== 'all') {
+            var addr = item.address_clean || item.address || '';
+            if (addr.indexOf(city) === -1) return false;
+        }
+        var stage = getStageShort(item.stage_id);
+        var inMain = STAGES_MAIN.indexOf(stage) !== -1;
+        var inLong = STAGES_LONG.indexOf(stage) !== -1;
+        if (showMain && showLong) return inMain || inLong;
+        if (showMain) return inMain;
+        if (showLong) return inLong;
+        return true;
+    });
+
+    document.getElementById('filteredCount').textContent = filteredData.length;
+    renderMarkers();
+}
+
+// ============================================================
+// МАРКЕРЫ
+// ============================================================
+function getStageClass(stage) {
+    if (STAGES_MAIN.indexOf(stage) !== -1) return 'stage-main';
+    if (STAGES_LONG.indexOf(stage) !== -1) return 'stage-long';
+    return 'stage-default';
+}
+
+function createMarker(item, idx) {
+    var title = item.title || '';
+    var addr = item.address_clean || item.address || '';
+    var stage = getStageShort(item.stage_id);
+    var cls = getStageClass(stage);
+    var displayTitle = title.length > 30 ? title.substring(0,28)+'…' : title;
+
+    var html = '<div class="custom-marker" data-index="'+idx+'">' +
+        '<div class="marker-dot large '+cls+'"></div>' +
+        '<span class="marker-label '+cls+'">'+displayTitle+'</span>' +
+        '<div class="marker-tooltip-list"><div class="tt-title">'+title+'</div><div class="tt-item"><span class="tt-address">'+addr+'</span></div></div>' +
+        '</div>';
+
+    var icon = L.divIcon({ html: html, className: '', iconSize: [0,0], iconAnchor: [0,-10] });
+    var marker = L.marker([item.lat, item.lon], { icon: icon, interactive: true, keyboard: false });
+    marker._index = idx;
+    marker.on('click', function(e) {
+        var it = filteredData[e.target._index];
+        if (it) map.setView([it.lat, it.lon], 17, { animate: true, duration: 0.5 });
+    });
+    return marker;
+}
+
+function createClusterIcon(cluster) {
+    var count = cluster.getChildCount();
+    var size = count > 30 ? 'large' : count > 10 ? 'medium' : 'small';
+    var markers = cluster.getAllChildMarkers();
+    var items = markers.map(function(m) { return filteredData[m._index]; }).filter(function(i) { return i; });
+    var titles = items.map(function(i) { return i.title || 'Без названия'; });
+    var tip = titles.join(', ');
+    if (tip.length > 50) tip = tip.substring(0,47)+'…';
+    var html = '<div class="cluster-marker '+size+'" title="'+tip+'">'+count+'</div>';
+    return L.divIcon({ html: html, className: '', iconSize: [0,0], iconAnchor: [0,0] });
+}
+
+function createClusterPopup(cluster) {
+    var markers = cluster.getAllChildMarkers();
+    var items = markers.map(function(m) { return filteredData[m._index]; }).filter(function(i) { return i; });
+    var html = '<div style="max-height:320px;overflow-y:auto;min-width:220px;">';
+    for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var stage = getStageShort(it.stage_id);
+        var color = STAGES_MAIN.indexOf(stage)!==-1 ? '#FF6B6B' : STAGES_LONG.indexOf(stage)!==-1 ? '#FFEAA7' : '#A8A8A8';
+        html += '<div class="popup-item" onclick="zoomToObject('+it.lat+','+it.lon+')">' +
+            '<div class="popup-title">'+(it.title||'Без названия')+'</div>' +
+            '<div class="popup-address">'+(it.address_clean||it.address||'')+'</div>' +
+            '<div class="popup-stage" style="background:'+color+'20;color:'+color+';">'+(stage||'без стадии')+'</div>' +
+            '</div>';
+    }
+    html += '<div class="popup-click-hint">👆 Кликните для приближения</div></div>';
+    return html;
+}
+
+function zoomToObject(lat, lon) {
+    map.setView([lat, lon], 17, { animate: true, duration: 0.5 });
+    map.closePopup();
+}
+
+// ============================================================
+// ОТРИСОВКА КАРТЫ
+// ============================================================
+function renderMarkers() {
+    if (clusterGroup) map.removeLayer(clusterGroup);
+    clusterGroup = L.markerClusterGroup({
+        iconCreateFunction: createClusterIcon,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true,
+        maxClusterRadius: 60,
+        polygonOptions: { weight: 0, color: 'transparent' }
+    });
+    clusterGroup.on('clustermouseover', function(e) {
+        var c = e.layer;
+        c.bindPopup(createClusterPopup(c), { className: 'cluster-popup', maxWidth: 360, minWidth: 220 });
+        c.openPopup();
+    });
+    clusterGroup.on('clustermouseout', function(e) { e.layer.closePopup(); });
+
+    for (var i = 0; i < filteredData.length; i++) {
+        clusterGroup.addLayer(createMarker(filteredData[i], i));
+    }
+    map.addLayer(clusterGroup);
+    if (filteredData.length > 0) {
+        var b = clusterGroup.getBounds();
+        if (b.isValid()) map.fitBounds(b, { padding: [50,50], maxZoom: 15 });
+    }
+}
+
+// ============================================================
+// ПОИСК
+// ============================================================
+function searchAddress() {
+    var q = document.getElementById('searchInput').value.trim().toLowerCase();
+    if (!q) return;
+    var found = [];
+    for (var i = 0; i < filteredData.length; i++) {
+        var it = filteredData[i];
+        if (it.title && it.title.toLowerCase().indexOf(q) !== -1) found.push(it);
+    }
+    if (found.length === 0) { alert('Ничего не найдено'); clearSearch(); return; }
+    if (found.length === 1) { map.setView([found[0].lat, found[0].lon], 17, { animate: true, duration: 0.5 }); return; }
+    var html = '<div style="max-height:250px;overflow-y:auto;min-width:200px;"><div style="font-weight:600;margin-bottom:8px;">Найдено: '+found.length+'</div>';
+    for (var i = 0; i < found.length; i++) {
+        var it = found[i];
+        html += '<div class="popup-item" onclick="zoomToObject('+it.lat+','+it.lon+')">' +
+            '<div class="popup-title">'+(it.title||'Без названия')+'</div>' +
+            '<div class="popup-address">'+(it.address_clean||it.address||'')+'</div>' +
+            '</div>';
+    }
+    html += '<div class="popup-click-hint">👆 Кликните для приближения</div></div>';
+    L.popup({ className: 'cluster-popup', maxWidth: 320, minWidth: 200 })
+        .setLatLng([found[0].lat, found[0].lon])
         .setContent(html)
         .openOn(map);
+}
+
+function clearSearch() {
+    document.getElementById('searchInput').value = '';
+    map.closePopup();
+    if (filteredData.length > 0) {
+        var b = clusterGroup.getBounds();
+        if (b.isValid()) map.fitBounds(b, { padding: [50,50] });
     }
-    
-    function clearSearch() {
-        document.getElementById('searchInput').value = '';
-        map.closePopup();
-        if (filteredData.length > 0) {
-            var bounds = clusterGroup.getBounds();
-            if (bounds.isValid()) {
-                map.fitBounds(bounds, { padding: [50, 50] });
-            }
-        }
-    }
-    
-    // ============================================================
-    // ПЕРЕКЛЮЧЕНИЕ СЛОЁВ
-    // ============================================================
-    function setupTileLayers() {
-        tileLayers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap',
-            maxZoom: 19
-        });
-        
-        tileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; ESRI',
-            maxZoom: 19
-        });
-        
-        tileLayers.hybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-            attribution: '&copy; Google',
-            maxZoom: 19,
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-        });
-        
-        currentLayer = tileLayers.osm;
-        currentLayer.addTo(map);
-    }
-    
-    function switchLayer(layerName) {
-        if (!tileLayers[layerName]) return;
-        if (currentLayer) map.removeLayer(currentLayer);
-        currentLayer = tileLayers[layerName];
-        currentLayer.addTo(map);
-        
-        document.querySelectorAll('#layerControl button').forEach(function(btn) {
-            btn.classList.toggle('active', btn.dataset.layer === layerName);
-        });
-    }
-    
-    // ============================================================
-    // СОБЫТИЯ
-    // ============================================================
-    document.getElementById('searchInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') searchAddress();
+}
+
+// ============================================================
+// СЛОИ
+// ============================================================
+function setupLayers() {
+    tileLayers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 });
+    tileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; ESRI', maxZoom: 19 });
+    tileLayers.hybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { attribution: '&copy; Google', maxZoom: 19, subdomains: ['mt0','mt1','mt2','mt3'] });
+    currentLayer = tileLayers.osm;
+    currentLayer.addTo(map);
+}
+
+function switchLayer(name) {
+    if (!tileLayers[name]) return;
+    if (currentLayer) map.removeLayer(currentLayer);
+    currentLayer = tileLayers[name];
+    currentLayer.addTo(map);
+    document.querySelectorAll('#layerControl button').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.layer === name);
     });
-    
-    document.querySelectorAll('#layerControl button').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            switchLayer(this.dataset.layer);
-        });
-    });
-    
-    setInterval(loadData, 5 * 60 * 1000);
-    
-    // ============================================================
-    // ЗАПУСК
-    // ============================================================
-    document.addEventListener('DOMContentLoaded', function() {
-        map = L.map('map', {
-            center: [55.76, 37.64],
-            zoom: 11,
-            zoomControl: false
-        });
-        
-        L.control.zoom({ position: 'topleft' }).addTo(map);
-        
-        setupTileLayers();
-        loadData();
-    });
-    </script>
+}
+
+// ============================================================
+// ЗАПУСК
+// ============================================================
+document.addEventListener('DOMContentLoaded', function() {
+    map = L.map('map', { center: [55.76, 37.64], zoom: 11, zoomControl: false });
+    L.control.zoom({ position: 'topleft' }).addTo(map);
+    setupLayers();
+    loadData();
+});
+
+document.getElementById('searchInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') searchAddress(); });
+document.querySelectorAll('#layerControl button').forEach(function(b) {
+    b.addEventListener('click', function() { switchLayer(this.dataset.layer); });
+});
+setInterval(loadData, 5 * 60 * 1000);
+</script>
 </body>
 </html>
