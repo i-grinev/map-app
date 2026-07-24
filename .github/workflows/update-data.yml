@@ -1,1 +1,42 @@
+name: Update Addresses
 
+on:
+  schedule:
+    # Каждый день в 6:00 по Москве (3:00 UTC)
+    - cron: '0 3 * * *'
+  workflow_dispatch:  # Ручной запуск
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: 📦 Install dependencies
+        run: |
+          pip install requests
+      
+      - name: 🚀 Run update
+        env:
+          BITRIX_WEBHOOK: ${{ secrets.BITRIX_WEBHOOK }}
+          YANDEX_API_KEY: ${{ secrets.YANDEX_API_KEY }}
+        run: |
+          python update_data.py
+      
+      - name: 📤 Commit and push
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add data/
+          git diff --staged --quiet || git commit -m "🔄 Auto-update $(date +'%Y-%m-%d')"
+          git push
