@@ -15,18 +15,16 @@ ENTITY_TYPE_ID = 1038
 ADDRESS_FIELD = 'ufCrm8FullAdress'
 YANDEX_API_KEY = os.environ.get('YANDEX_API_KEY', '')
 
-MAX_WORKERS = 10
-BATCH_SIZE = 50
+MAX_WORKERS = 5
+BATCH_SIZE = 20
 CACHE_FILE = 'data/geocode_cache.json'
-
-# Игнорируемые стадии (не геокодируются и не выводятся)
 IGNORE_STAGES = ['UC_QA1YNG']
 
 if not BITRIX_WEBHOOK:
-    raise Exception("❌ BITRIX_WEBHOOK не задан в переменных окружения!")
+    raise Exception("❌ BITRIX_WEBHOOK не задан!")
 
 # ============================================================
-# КЭШ
+# КЭШ (с проверкой изменений адреса)
 # ============================================================
 def load_cache():
     try:
@@ -39,8 +37,38 @@ def save_cache(cache):
     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
+def get_cache_key(address):
+    """Создаёт ключ кэша на основе адреса"""
+    return hashlib.md5(address.encode()).hexdigest()
+
+def is_address_changed(item, cache):
+    """
+    Проверяет, изменился ли адрес с момента последнего кэширования
+    """
+    address = item.get(ADDRESS_FIELD, '')
+    if not address:
+        return False
+    
+    cache_key = get_cache_key(address)
+    
+    # Если адреса нет в кэше — он изменился (или новый)
+    if cache_key not in cache:
+        return True
+    
+    # Проверяем, есть ли у нас сохранённая версия адреса
+    cached_data = cache.get(cache_key)
+    if not cached_data:
+        return True
+    
+    # Если в кэше есть координаты — адрес не изменился
+    if cached_data.get('lat') and cached_data.get('lon'):
+        return False
+    
+    # Если координат нет — адрес нужно перегеокодировать
+    return True
+
 # ============================================================
-# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ВСПОМОГАТЕЛЬНЫЕ
 # ============================================================
 def get_stage_short(stage_id):
     if not stage_id:
@@ -54,89 +82,21 @@ def should_ignore(stage_id):
     return get_stage_short(stage_id) in IGNORE_STAGES
 
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА (ФИНАЛЬНАЯ ВЕРСИЯ)
+# НОРМАЛИЗАЦИЯ — МИНИМАЛЬНАЯ
 # ============================================================
 def normalize_address(address):
-    """
-    Очищает адрес, но СОХРАНЯЕТ все важные части:
-    - город, улицу, дом, корпус, строение
-    - Убирает только явный мусор
-    """
+    """Минимальная очистка: только звёздочки и лишние пробелы"""
     if not address:
         return ''
     
     text = str(address).strip()
-    
-    # 1. Убираем звёздочки и решётки
     text = text.replace('*', '').replace('#', '')
     text = text.replace('\n', ' ').replace('\r', ' ')
-    
-    # 2. Убираем скобки
-    text = re.sub(r'\([^)]*\)', '', text)
-    text = re.sub(r'\[[^\]]*\]', '', text)
-    
-    # 3. Убираем "Адрес:" в начале
     text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
-    
-    # 4. Убираем "г." в начале (НО сохраняем название города)
-    text = re.sub(r'^\s*г\.\s*', '', text, flags=re.IGNORECASE)
-    
-    # 5. Убираем ЖК, МЦД, МЦК, Метро (только если они отдельно)
-    text = re.sub(r'\b(ЖК|МЦД|МЦК|Метро)\s*[«"][^»"]*[»"]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\b(ЖК|МЦД|МЦК|Метро)\s+[А-Яа-яёЁA-Za-z]+\s*', '', text, flags=re.IGNORECASE)
-    
-    # 6. Заменяем сокращения на полные слова (ПОЛНЫЙ СПИСОК)
-    replacements = {
-        r'\bул\.\b': 'улица',
-        r'\bпр-д\b': 'проезд',
-        r'\bпр-кт\b': 'проспект',
-        r'\bпр-т\b': 'проспект',
-        r'\bпр\.\b': 'проезд',
-        r'\bпер\.\b': 'переулок',
-        r'\bш\.\b': 'шоссе',
-        r'\bнаб\.\b': 'набережная',
-        r'\bб-р\b': 'бульвар',
-        r'\bбул\.\b': 'бульвар',
-        r'\bпос\.\b': 'поселок',
-        r'\bд\.\b': 'дом',
-        r'\bк\.\b': 'корпус',
-        r'\bстр\.\b': 'строение',
-        r'\bкорп\.\b': 'корпус',
-        r'\bкор\b': 'корпус',        # ДОБАВЛЕНО: "кор" без точки
-        r'\bстр\b': 'строение',      # ДОБАВЛЕНО: "стр" без точки
-    }
-    
-    for pattern, replacement in replacements.items():
-        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-    
-    # 7. Формат "23к7" -> "23 корпус 7"
-    text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
-    
-    # 8. Убираем ТОЛЬКО явные пояснения в КОНЦЕ (не трогаем адрес)
-    text = re.sub(r',?\s*код\s*домофона[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*домофон[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*ключ[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*парковка[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*Wi-Fi[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*Важно[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*обязательно[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*геолокация[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*со стороны[\s\S]*$', '', text, flags=re.IGNORECASE)
-    
-    # 9. Чистим лишние пробелы и запятые
-    text = re.sub(r',+', ',', text)
     text = re.sub(r'\s+', ' ', text)
     text = text.strip().rstrip(',').rstrip('.')
     
-    if len(text) < 5:
-        return text
-    
-    # 10. Добавляем "Москва" только если нет города
-    cities = r'(Москва|Санкт-Петербург|Краснодар|Ялта|Сочи|Казань|Екатеринбург|Новосибирск|Мытищи|Видное|Люберцы|Химки|Долгопрудный|Ступино|Котельники|Красногорск|область|край|республика|район|поселок|деревня|село|город)'
-    if not re.search(cities, text, re.IGNORECASE):
-        text = 'Москва, ' + text
-    
-    return text
+    return text if len(text) >= 5 else ''
 
 # ============================================================
 # ГЕОКОДИРОВАНИЕ
@@ -146,8 +106,14 @@ def geocode_yandex(address):
         return None
     try:
         url = "https://geocode-maps.yandex.ru/1.x/"
-        params = {'apikey': YANDEX_API_KEY, 'geocode': address, 'format': 'json', 'results': 1, 'lang': 'ru_RU'}
-        response = requests.get(url, params=params, timeout=5)
+        params = {
+            'apikey': YANDEX_API_KEY,
+            'geocode': address,
+            'format': 'json',
+            'results': 1,
+            'lang': 'ru_RU'
+        }
+        response = requests.get(url, params=params, timeout=10)
         if response.status_code == 200:
             data = response.json()
             members = data.get('response', {}).get('GeoObjectCollection', {}).get('featureMember', [])
@@ -164,8 +130,18 @@ def geocode_yandex(address):
 def geocode_osm(address):
     try:
         url = "https://nominatim.openstreetmap.org/search"
-        params = {'q': address, 'format': 'json', 'limit': 1, 'accept-language': 'ru'}
-        response = requests.get(url, params=params, headers={'User-Agent': 'MapApp/1.0'}, timeout=5)
+        params = {
+            'q': address,
+            'format': 'json',
+            'limit': 1,
+            'accept-language': 'ru'
+        }
+        response = requests.get(
+            url,
+            params=params,
+            headers={'User-Agent': 'MapApp/1.0 (https://i-grinev.github.io/map-app)'},
+            timeout=15
+        )
         if response.status_code == 200 and response.json():
             data = response.json()[0]
             lat, lon = float(data['lat']), float(data['lon'])
@@ -178,11 +154,20 @@ def geocode_osm(address):
 def geocode_address(address, cache):
     if not address:
         return None
-    cache_key = hashlib.md5(address.encode()).hexdigest()
-    if cache_key in cache and cache[cache_key]:
-        return cache[cache_key]
     
+    cache_key = get_cache_key(address)
+    
+    # Проверяем кэш
+    if cache_key in cache and cache[cache_key]:
+        cached = cache[cache_key]
+        # Если есть координаты — возвращаем их
+        if cached.get('lat') and cached.get('lon'):
+            return cached
+    
+    # Геокодируем
     coords = None
+    
+    # 1. Яндекс
     if YANDEX_API_KEY:
         coords = geocode_yandex(address)
         if coords:
@@ -190,12 +175,22 @@ def geocode_address(address, cache):
             save_cache(cache)
             return coords
     
+    # 2. OSM
     coords = geocode_osm(address)
     if coords:
         cache[cache_key] = coords
         save_cache(cache)
         return coords
     
+    # 3. OSM с "Россия"
+    if 'Москва' not in address and 'Санкт-Петербург' not in address and 'Краснодар' not in address:
+        coords = geocode_osm(address + ', Россия')
+        if coords:
+            cache[cache_key] = coords
+            save_cache(cache)
+            return coords
+    
+    # Не найдено
     cache[cache_key] = None
     save_cache(cache)
     return None
@@ -220,7 +215,17 @@ def process_item(item, cache):
     
     address = item.get(ADDRESS_FIELD, '')
     clean = normalize_address(address) if address else ''
-    coords = geocode_address(clean, cache) if clean else None
+    
+    # Проверяем, нужно ли геокодировать
+    coords = None
+    if clean:
+        # Если адрес в кэше и координаты есть — используем их
+        cache_key = get_cache_key(clean)
+        if cache_key in cache and cache[cache_key] and cache[cache_key].get('lat'):
+            coords = cache[cache_key]
+        else:
+            # Геокодируем только если адрес изменился или нет в кэше
+            coords = geocode_address(clean, cache)
     
     return {
         'id': item.get('id'),
@@ -244,13 +249,14 @@ def process_parallel(items, cache):
         completed = 0
         for future in as_completed(futures):
             try:
-                result, found = future.result(timeout=30)
+                result, found = future.result(timeout=60)
                 results.append(result)
                 if found: geocoded += 1
                 if result.get('ignored'): ignored += 1
                 completed += 1
                 if completed % BATCH_SIZE == 0 or completed == total:
                     print(f"   {completed}/{total} | Найдено: {geocoded} | Игнор: {ignored} | {time.time()-start_time:.0f}с")
+                time.sleep(0.5)
             except Exception as e:
                 print(f"   ❌ Ошибка: {e}")
                 completed += 1
@@ -293,6 +299,7 @@ def main():
     print(f"🔄 Обновление: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"   Яндекс ключ: {'✅' if YANDEX_API_KEY else '❌'}")
     
+    # Загружаем кэш (НЕ ОЧИЩАЕМ)
     cache = load_cache()
     print(f"   Кэш: {len(cache)} записей")
     
@@ -306,10 +313,9 @@ def main():
     ignored_count = total_before - len(items_to_process)
     print(f"   Всего: {total_before}, игнор: {ignored_count}, обраб: {len(items_to_process)}")
     
-    print(f"📍 Геокодирование...")
+    print(f"📍 Геокодирование (используем кэш)...")
     results, geocoded, ignored = process_parallel(items_to_process, cache)
     
-    # Добавляем игнорируемые
     ignored_results = []
     for item in items:
         if should_ignore(item.get('stageId', '')):
