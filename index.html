@@ -97,41 +97,120 @@
         .layer-control button.active { background: #1a73e8; color: white; border-color: #1a73e8; }
         
         /* ============================================================
-           СТИЛИ ДЛЯ КАСТОМНЫХ МАРКЕРОВ
+           ФИЛЬТРЫ В ПРАВОМ ВЕРХНЕМ УГЛУ
+           ============================================================ */
+        .filters {
+            position: fixed;
+            top: 70px;
+            right: 16px;
+            background: white;
+            padding: 14px 18px;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 180px;
+            font-size: 12px;
+        }
+        .filters h4 {
+            font-size: 13px;
+            color: #202124;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #e8eaed;
+            padding-bottom: 6px;
+        }
+        .filters .filter-group {
+            margin-bottom: 10px;
+        }
+        .filters .filter-group label {
+            display: block;
+            margin-bottom: 4px;
+            color: #5f6368;
+            font-weight: 500;
+            font-size: 11px;
+        }
+        .filters select {
+            width: 100%;
+            padding: 4px 8px;
+            border: 1px solid #dadce0;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+            background: white;
+        }
+        .filters select:focus {
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 2px rgba(26,115,232,0.2);
+        }
+        .filters .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            cursor: pointer;
+        }
+        .filters .checkbox-group input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #1a73e8;
+        }
+        .filters .checkbox-group label {
+            cursor: pointer;
+            color: #333;
+            font-size: 12px;
+        }
+        .filters .filter-stats {
+            font-size: 10px;
+            color: #999;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e8eaed;
+            text-align: center;
+        }
+        .filters .filter-stats span {
+            font-weight: 600;
+            color: #1a73e8;
+        }
+        
+        /* ============================================================
+           СТИЛИ ДЛЯ КАСТОМНЫХ МАРКЕРОВ (большие точки)
            ============================================================ */
         
         .custom-marker {
             display: flex;
             align-items: center;
-            gap: 4px;
+            gap: 6px;
             cursor: pointer;
             transition: transform 0.15s;
             position: relative;
         }
         .custom-marker:hover {
-            transform: scale(1.05);
+            transform: scale(1.08);
         }
         
         .marker-dot {
-            width: 10px;
-            height: 10px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
-            background: #1a73e8;
             border: 2px solid white;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+            box-shadow: 0 1px 6px rgba(0,0,0,0.35);
             flex-shrink: 0;
             transition: all 0.2s;
         }
+        .marker-dot.large {
+            width: 20px;
+            height: 20px;
+        }
         
         .marker-label {
-            background: rgba(26, 115, 232, 0.88);
+            background: rgba(26, 115, 232, 0.9);
             color: white;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
+            padding: 3px 12px;
+            border-radius: 14px;
+            font-size: 12px;
             font-weight: 500;
             white-space: nowrap;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 1px 6px rgba(0,0,0,0.2);
             border: 1px solid rgba(255,255,255,0.3);
             backdrop-filter: blur(2px);
             transition: all 0.2s;
@@ -140,8 +219,24 @@
         
         .custom-marker:hover .marker-label {
             background: rgba(26, 115, 232, 1);
-            box-shadow: 0 2px 8px rgba(26,115,232,0.4);
+            box-shadow: 0 2px 10px rgba(26,115,232,0.4);
         }
+        
+        /* Цвета для разных стадий */
+        .marker-dot.stage-UC_WXDLF4 { background: #FF6B6B; }
+        .marker-dot.stage-NEW { background: #96CEB4; }
+        .marker-dot.stage-UC_LJBX0Q { background: #FFEAA7; }
+        .marker-dot.stage-default { background: #A8A8A8; }
+        
+        .marker-label.stage-UC_WXDLF4 { background: rgba(255,107,107,0.9); }
+        .marker-label.stage-NEW { background: rgba(150,206,180,0.9); }
+        .marker-label.stage-UC_LJBX0Q { background: rgba(255,234,167,0.9); color: #333; }
+        .marker-label.stage-default { background: rgba(168,168,168,0.9); }
+        
+        .custom-marker:hover .marker-label.stage-UC_WXDLF4 { background: rgba(255,107,107,1); }
+        .custom-marker:hover .marker-label.stage-NEW { background: rgba(150,206,180,1); }
+        .custom-marker:hover .marker-label.stage-UC_LJBX0Q { background: rgba(255,234,167,1); }
+        .custom-marker:hover .marker-label.stage-default { background: rgba(168,168,168,1); }
         
         /* Тултип со списком объектов при наведении */
         .marker-tooltip-list {
@@ -150,13 +245,13 @@
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.9);
+            background: rgba(0,0,0,0.92);
             color: white;
             padding: 8px 12px;
             border-radius: 8px;
             font-size: 11px;
-            min-width: 150px;
-            max-width: 300px;
+            min-width: 160px;
+            max-width: 320px;
             pointer-events: none;
             margin-bottom: 8px;
             z-index: 1000;
@@ -169,7 +264,7 @@
             left: 50%;
             transform: translateX(-50%);
             border: 5px solid transparent;
-            border-top-color: rgba(0,0,0,0.9);
+            border-top-color: rgba(0,0,0,0.92);
         }
         .marker-tooltip-list .tt-title {
             font-weight: 600;
@@ -199,46 +294,45 @@
            ============================================================ */
         
         .cluster-marker {
-            background: #1a73e8;
             color: white;
             border-radius: 50%;
-            width: 36px;
-            height: 36px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
             font-weight: 700;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
             border: 2px solid white;
             cursor: pointer;
             transition: all 0.2s;
+            position: relative;
         }
         .cluster-marker:hover {
             transform: scale(1.1);
-            background: #1557b0;
         }
         
-        /* Кластеры разных размеров */
-        .cluster-marker.small { width: 30px; height: 30px; font-size: 11px; }
-        .cluster-marker.medium { width: 38px; height: 38px; font-size: 14px; }
-        .cluster-marker.large { width: 46px; height: 46px; font-size: 16px; }
+        .cluster-marker.small { width: 32px; height: 32px; font-size: 12px; background: #1a73e8; }
+        .cluster-marker.medium { width: 42px; height: 42px; font-size: 15px; background: #1557b0; }
+        .cluster-marker.large { width: 52px; height: 52px; font-size: 18px; background: #0d47a1; }
         
         /* Кастомный попап для кластера */
         .cluster-popup .leaflet-popup-content-wrapper {
             border-radius: 10px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            max-height: 350px;
         }
         .cluster-popup .leaflet-popup-content {
             font-size: 13px;
-            max-height: 300px;
+            max-height: 320px;
             overflow-y: auto;
-            min-width: 200px;
+            min-width: 220px;
+            padding-right: 4px;
         }
         .cluster-popup .leaflet-popup-content .popup-item {
-            padding: 4px 0;
+            padding: 6px 8px;
             border-bottom: 1px solid #e8eaed;
             cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.15s;
         }
         .cluster-popup .leaflet-popup-content .popup-item:last-child {
             border-bottom: none;
@@ -249,18 +343,44 @@
         .cluster-popup .leaflet-popup-content .popup-title {
             font-weight: 600;
             color: #1a73e8;
+            font-size: 13px;
         }
         .cluster-popup .leaflet-popup-content .popup-address {
             color: #5f6368;
-            font-size: 12px;
+            font-size: 11px;
+            margin-top: 2px;
+        }
+        .cluster-popup .leaflet-popup-content .popup-stage {
+            font-size: 10px;
+            color: #999;
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 10px;
+            margin-top: 2px;
         }
         .cluster-popup .leaflet-popup-content .popup-click-hint {
             color: #999;
             font-size: 11px;
             font-style: italic;
-            margin-top: 6px;
-            padding-top: 6px;
+            margin-top: 8px;
+            padding-top: 8px;
             border-top: 1px solid #e8eaed;
+            text-align: center;
+        }
+        
+        /* Стили для скролла в попапе */
+        .cluster-popup .leaflet-popup-content::-webkit-scrollbar {
+            width: 4px;
+        }
+        .cluster-popup .leaflet-popup-content::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .cluster-popup .leaflet-popup-content::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .cluster-popup .leaflet-popup-content::-webkit-scrollbar-thumb:hover {
+            background: #555;
         }
         
         @media (max-width: 768px) {
@@ -268,13 +388,19 @@
             .controls { justify-content: stretch; }
             .controls input { min-width: unset; width: 100%; }
             .layer-control { bottom: 8px; right: 8px; left: 8px; justify-content: center; }
-            .marker-label { font-size: 9px; padding: 1px 6px; }
-            .marker-dot { width: 8px; height: 8px; }
-            .cluster-marker { width: 28px; height: 28px; font-size: 11px; }
-            .cluster-marker.small { width: 24px; height: 24px; font-size: 10px; }
-            .cluster-marker.medium { width: 32px; height: 32px; font-size: 12px; }
-            .cluster-marker.large { width: 38px; height: 38px; font-size: 14px; }
-            .marker-tooltip-list { font-size: 10px; min-width: 120px; max-width: 200px; }
+            .filters {
+                top: 100px;
+                right: 8px;
+                left: 8px;
+                min-width: unset;
+                padding: 10px 14px;
+            }
+            .marker-label { font-size: 10px; padding: 2px 8px; }
+            .marker-dot { width: 14px; height: 14px; }
+            .marker-dot.large { width: 18px; height: 18px; }
+            .cluster-marker.small { width: 28px; height: 28px; font-size: 11px; }
+            .cluster-marker.medium { width: 36px; height: 36px; font-size: 13px; }
+            .cluster-marker.large { width: 44px; height: 44px; font-size: 15px; }
         }
     </style>
 </head>
@@ -300,6 +426,34 @@
     
     <div id="map"></div>
     
+    <!-- ФИЛЬТРЫ -->
+    <div class="filters" id="filters">
+        <h4>🔍 Фильтры</h4>
+        
+        <div class="filter-group">
+            <label for="cityFilter">🌆 Город</label>
+            <select id="cityFilter" onchange="applyFilters()">
+                <option value="all">Все города</option>
+            </select>
+        </div>
+        
+        <div class="filter-group">
+            <label>📌 Стадии</label>
+            <div class="checkbox-group" onclick="toggleCheckbox('stageCheck')">
+                <input type="checkbox" id="stageCheck" checked onchange="applyFilters()" />
+                <label for="stageCheck">Основные (UC_WXDLF4, NEW)</label>
+            </div>
+            <div class="checkbox-group" onclick="toggleCheckbox('longTermCheck')">
+                <input type="checkbox" id="longTermCheck" onchange="applyFilters()" />
+                <label for="longTermCheck">🕐 Длительная (UC_LJBX0Q)</label>
+            </div>
+        </div>
+        
+        <div class="filter-stats">
+            Показано: <span id="filteredCount">0</span> из <span id="totalCount">0</span>
+        </div>
+    </div>
+    
     <div class="updated-at" id="updatedAt"></div>
     
     <div class="layer-control" id="layerControl">
@@ -318,9 +472,17 @@
     var map = null;
     var clusterGroup = null;
     var allData = [];
+    var filteredData = [];
     var tileLayers = {};
     var currentLayer = null;
-    var markers = [];
+    
+    // ============================================================
+    // КОНСТАНТЫ СТАДИЙ
+    // ============================================================
+    var STAGES = {
+        MAIN: ['UC_WXDLF4', 'NEW'],
+        LONG_TERM: ['UC_LJBX0Q']
+    };
     
     // ============================================================
     // ЗАГРУЗКА ДАННЫХ
@@ -341,10 +503,14 @@
                 });
                 
                 document.getElementById('stats').textContent = allData.length;
+                document.getElementById('totalCount').textContent = allData.length;
                 document.getElementById('updateBadge').textContent = new Date(data.updated_at).toLocaleString('ru-RU');
                 document.getElementById('updatedAt').textContent = '🔄 ' + new Date(data.updated_at).toLocaleString('ru-RU');
                 
-                renderMarkers();
+                // Заполняем фильтр городов
+                populateCityFilter();
+                
+                applyFilters();
             })
             .catch(function(error) {
                 document.getElementById('loading').classList.add('hidden');
@@ -354,20 +520,106 @@
     }
     
     // ============================================================
+    // ЗАПОЛНЕНИЕ ФИЛЬТРА ГОРОДОВ
+    // ============================================================
+    function populateCityFilter() {
+        var cities = {};
+        for (var i = 0; i < allData.length; i++) {
+            var addr = allData[i].address_clean || allData[i].address || '';
+            var city = extractCity(addr);
+            if (city) {
+                cities[city] = (cities[city] || 0) + 1;
+            }
+        }
+        
+        var select = document.getElementById('cityFilter');
+        // Очищаем, оставляя только "Все города"
+        select.innerHTML = '<option value="all">Все города</option>';
+        
+        var cityNames = Object.keys(cities).sort();
+        for (var i = 0; i < cityNames.length; i++) {
+            var option = document.createElement('option');
+            option.value = cityNames[i];
+            option.textContent = cityNames[i] + ' (' + cities[cityNames[i]] + ')';
+            select.appendChild(option);
+        }
+    }
+    
+    function extractCity(address) {
+        if (!address) return null;
+        var cities = ['Москва', 'Краснодар', 'Санкт-Петербург', 'Ялта', 'Мытищи', 
+                      'Видное', 'Люберцы', 'Химки', 'Долгопрудный', 'Ступино', 
+                      'Котельники', 'Красногорск', 'Казань', 'Сочи', 'Екатеринбург',
+                      'Новосибирск', 'Республика Дагестан', 'Адыгея'];
+        for (var i = 0; i < cities.length; i++) {
+            if (address.indexOf(cities[i]) !== -1) {
+                return cities[i];
+            }
+        }
+        return null;
+    }
+    
+    // ============================================================
+    // ПРИМЕНЕНИЕ ФИЛЬТРОВ
+    // ============================================================
+    function applyFilters() {
+        var city = document.getElementById('cityFilter').value;
+        var showMain = document.getElementById('stageCheck').checked;
+        var showLongTerm = document.getElementById('longTermCheck').checked;
+        
+        filteredData = allData.filter(function(item) {
+            // Фильтр по городу
+            if (city !== 'all') {
+                var addr = item.address_clean || item.address || '';
+                if (addr.indexOf(city) === -1) return false;
+            }
+            
+            // Фильтр по стадиям
+            var stage = item.stage_id || '';
+            var inMain = STAGES.MAIN.indexOf(stage) !== -1;
+            var inLongTerm = STAGES.LONG_TERM.indexOf(stage) !== -1;
+            
+            if (inMain && showMain) return true;
+            if (inLongTerm && showLongTerm) return true;
+            
+            return false;
+        });
+        
+        document.getElementById('filteredCount').textContent = filteredData.length;
+        renderMarkers();
+    }
+    
+    // ============================================================
+    // ВСПОМОГАТЕЛЬНАЯ ДЛЯ ЧЕКБОКСОВ
+    // ============================================================
+    function toggleCheckbox(id) {
+        var cb = document.getElementById(id);
+        cb.checked = !cb.checked;
+        applyFilters();
+    }
+    
+    // ============================================================
     // СОЗДАНИЕ МАРКЕРА ДЛЯ ОДНОГО ОБЪЕКТА
     // ============================================================
     function createMarker(item, index) {
         var title = item.title || '';
         var address = item.address_clean || item.address || '';
+        var stage = item.stage_id || 'default';
         
         var displayTitle = title;
-        if (displayTitle.length > 25) {
-            displayTitle = displayTitle.substring(0, 23) + '…';
+        if (displayTitle.length > 30) {
+            displayTitle = displayTitle.substring(0, 28) + '…';
+        }
+        
+        // Определяем класс стадии для цвета
+        var stageClass = 'stage-' + stage;
+        if (STAGES.MAIN.indexOf(stage) === -1 && STAGES.LONG_TERM.indexOf(stage) === -1) {
+            stageClass = 'stage-default';
         }
         
         var html = '<div class="custom-marker" data-index="' + index + '">' +
-            '<div class="marker-dot"></div>' +
-            '<span class="marker-label">' + displayTitle + '</span>' +
+            '<div class="marker-dot large ' + stageClass + '"></div>' +
+            '<span class="marker-label ' + stageClass + '">' + displayTitle + '</span>' +
             '<div class="marker-tooltip-list">' +
             '<div class="tt-title">' + title + '</div>' +
             '<div class="tt-item"><span class="tt-address">' + address + '</span></div>' +
@@ -378,7 +630,7 @@
             html: html,
             className: '',
             iconSize: [0, 0],
-            iconAnchor: [0, -8]
+            iconAnchor: [0, -10]
         });
         
         var marker = L.marker([item.lat, item.lon], {
@@ -392,7 +644,7 @@
         // Клик — масштабирование
         marker.on('click', function(e) {
             var idx = e.target._index;
-            var item = allData[idx];
+            var item = filteredData[idx];
             if (item) {
                 map.setView([item.lat, item.lon], 17, {
                     animate: true,
@@ -414,7 +666,19 @@
         if (count > 10) sizeClass = 'medium';
         if (count > 30) sizeClass = 'large';
         
-        var html = '<div class="cluster-marker ' + sizeClass + '">' + count + '</div>';
+        // Собираем названия объектов для тултипа
+        var markers = cluster.getAllChildMarkers();
+        var items = markers.map(function(m) {
+            return filteredData[m._index];
+        }).filter(function(i) { return i; });
+        
+        var titles = items.map(function(i) { return i.title || 'Без названия'; });
+        var tooltipText = titles.join(', ');
+        if (tooltipText.length > 50) {
+            tooltipText = tooltipText.substring(0, 47) + '…';
+        }
+        
+        var html = '<div class="cluster-marker ' + sizeClass + '" title="' + tooltipText + '">' + count + '</div>';
         
         return L.divIcon({
             html: html,
@@ -430,23 +694,32 @@
     function createClusterPopup(cluster) {
         var markers = cluster.getAllChildMarkers();
         var items = markers.map(function(m) {
-            return allData[m._index];
+            return filteredData[m._index];
         }).filter(function(i) { return i; });
         
-        var html = '<div style="max-height: 300px; overflow-y: auto; min-width: 200px;">';
+        var html = '<div style="max-height: 320px; overflow-y: auto; min-width: 220px;">';
         
         for (var i = 0; i < items.length; i++) {
             var item = items[i];
+            var stage = item.stage_id || '';
+            var stageLabel = stage || 'без стадии';
             html += '<div class="popup-item" onclick="zoomToObject(' + item.lat + ',' + item.lon + ')">' +
                 '<div class="popup-title">' + (item.title || 'Без названия') + '</div>' +
                 '<div class="popup-address">' + (item.address_clean || item.address || '') + '</div>' +
+                '<div class="popup-stage" style="background:' + getStageColor(stage) + '20;color:' + getStageColor(stage) + ';">' + stageLabel + '</div>' +
                 '</div>';
         }
         
-        html += '<div class="popup-click-hint">👆 Кликните по названию для приближения</div>';
+        html += '<div class="popup-click-hint">👆 Кликните по объекту для приближения</div>';
         html += '</div>';
         
         return html;
+    }
+    
+    function getStageColor(stage) {
+        if (STAGES.MAIN.indexOf(stage) !== -1) return '#FF6B6B';
+        if (STAGES.LONG_TERM.indexOf(stage) !== -1) return '#FFEAA7';
+        return '#A8A8A8';
     }
     
     // ============================================================
@@ -457,7 +730,6 @@
             animate: true,
             duration: 0.5
         });
-        // Закрываем попап
         map.closePopup();
     }
     
@@ -469,12 +741,18 @@
             map.removeLayer(clusterGroup);
         }
         
+        if (filteredData.length === 0) {
+            clusterGroup = L.markerClusterGroup();
+            map.addLayer(clusterGroup);
+            return;
+        }
+        
         clusterGroup = L.markerClusterGroup({
             iconCreateFunction: createClusterIcon,
             spiderfyOnMaxZoom: true,
             showCoverageOnHover: false,
             zoomToBoundsOnClick: true,
-            maxClusterRadius: 50,
+            maxClusterRadius: 60,
             polygonOptions: {
                 weight: 0,
                 color: 'transparent'
@@ -487,8 +765,8 @@
             var popupContent = createClusterPopup(cluster);
             cluster.bindPopup(popupContent, {
                 className: 'cluster-popup',
-                maxWidth: 320,
-                minWidth: 200
+                maxWidth: 360,
+                minWidth: 220
             });
             cluster.openPopup();
         });
@@ -498,15 +776,15 @@
         });
         
         // Добавляем все маркеры
-        for (var i = 0; i < allData.length; i++) {
-            var marker = createMarker(allData[i], i);
+        for (var i = 0; i < filteredData.length; i++) {
+            var marker = createMarker(filteredData[i], i);
             clusterGroup.addLayer(marker);
         }
         
         map.addLayer(clusterGroup);
         
         // Центрируем карту
-        if (allData.length > 0) {
+        if (filteredData.length > 0) {
             var bounds = clusterGroup.getBounds();
             if (bounds.isValid()) {
                 map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
@@ -521,131 +799,37 @@
         var query = document.getElementById('searchInput').value.trim().toLowerCase();
         if (!query) return;
         
-        var found = false;
         var foundItems = [];
-        
-        for (var i = 0; i < allData.length; i++) {
-            var item = allData[i];
+        for (var i = 0; i < filteredData.length; i++) {
+            var item = filteredData[i];
             var match = (item.title && item.title.toLowerCase().indexOf(query) !== -1);
             if (match) {
                 foundItems.push(item);
-                if (!found) {
-                    map.setView([item.lat, item.lon], 17, {
-                        animate: true,
-                        duration: 0.5
-                    });
-                    found = true;
-                }
             }
         }
         
-        if (!found) {
+        if (foundItems.length === 0) {
             alert('Ничего не найдено');
             clearSearch();
             return;
         }
         
+        if (foundItems.length === 1) {
+            map.setView([foundItems[0].lat, foundItems[0].lon], 17, {
+                animate: true,
+                duration: 0.5
+            });
+            return;
+        }
+        
         // Если найдено несколько, показываем их в попапе
-        if (foundItems.length > 1) {
-            var html = '<div style="max-height: 250px; overflow-y: auto; min-width: 200px;">' +
-                '<div style="font-weight: 600; margin-bottom: 8px;">Найдено: ' + foundItems.length + '</div>';
-            for (var i = 0; i < foundItems.length; i++) {
-                var item = foundItems[i];
-                html += '<div class="popup-item" onclick="zoomToObject(' + item.lat + ',' + item.lon + ')">' +
-                    '<div class="popup-title">' + (item.title || 'Без названия') + '</div>' +
-                    '<div class="popup-address">' + (item.address_clean || item.address || '') + '</div>' +
-                    '</div>';
-            }
-            html += '<div class="popup-click-hint">👆 Кликните для приближения</div>';
-            html += '</div>';
-            
-            var popup = L.popup({
-                className: 'cluster-popup',
-                maxWidth: 320,
-                minWidth: 200
-            })
-            .setLatLng([foundItems[0].lat, foundItems[0].lon])
-            .setContent(html)
-            .openOn(map);
+        var html = '<div style="max-height: 250px; overflow-y: auto; min-width: 200px;">' +
+            '<div style="font-weight: 600; margin-bottom: 8px;">Найдено: ' + foundItems.length + '</div>';
+        for (var i = 0; i < foundItems.length; i++) {
+            var item = foundItems[i];
+            html += '<div class="popup-item" onclick="zoomToObject(' + item.lat + ',' + item.lon + ')">' +
+                '<div class="popup-title">' + (item.title || 'Без названия') + '</div>' +
+                '<div class="popup-address">' + (item.address_clean || item.address || '') + '</div>' +
+                '</div>';
         }
-    }
-    
-    function clearSearch() {
-        document.getElementById('searchInput').value = '';
-        map.closePopup();
-        if (allData.length > 0) {
-            var bounds = clusterGroup.getBounds();
-            if (bounds.isValid()) {
-                map.fitBounds(bounds, { padding: [50, 50] });
-            }
-        }
-    }
-    
-    // ============================================================
-    // ПЕРЕКЛЮЧЕНИЕ СЛОЁВ
-    // ============================================================
-    function setupTileLayers() {
-        tileLayers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap',
-            maxZoom: 19
-        });
-        
-        tileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: '&copy; ESRI',
-            maxZoom: 19
-        });
-        
-        tileLayers.hybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-            attribution: '&copy; Google',
-            maxZoom: 19,
-            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-        });
-        
-        currentLayer = tileLayers.osm;
-        currentLayer.addTo(map);
-    }
-    
-    function switchLayer(layerName) {
-        if (!tileLayers[layerName]) return;
-        if (currentLayer) map.removeLayer(currentLayer);
-        currentLayer = tileLayers[layerName];
-        currentLayer.addTo(map);
-        
-        document.querySelectorAll('#layerControl button').forEach(function(btn) {
-            btn.classList.toggle('active', btn.dataset.layer === layerName);
-        });
-    }
-    
-    // ============================================================
-    // СОБЫТИЯ
-    // ============================================================
-    document.getElementById('searchInput').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') searchAddress();
-    });
-    
-    document.querySelectorAll('#layerControl button').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            switchLayer(this.dataset.layer);
-        });
-    });
-    
-    setInterval(loadData, 5 * 60 * 1000);
-    
-    // ============================================================
-    // ЗАПУСК
-    // ============================================================
-    document.addEventListener('DOMContentLoaded', function() {
-        map = L.map('map', {
-            center: [55.76, 37.64],
-            zoom: 11,
-            zoomControl: false
-        });
-        
-        L.control.zoom({ position: 'topleft' }).addTo(map);
-        
-        setupTileLayers();
-        loadData();
-    });
-    </script>
-</body>
-</html>
+        html += '<div class="popup-click-hint">👆 Кли
