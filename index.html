@@ -18,6 +18,7 @@
         .btn-primary{background:#1a73e8;color:#fff}.btn-primary:hover{background:#1557b0}
         .btn-warning{background:#fbbc04;color:#333}.btn-warning:hover{background:#e5ac00}
         .btn-success{background:#34a853;color:#fff}.btn-success:hover{background:#2d9248}
+        .btn-gray{background:#e8eaed;color:#333}.btn-gray:hover{background:#dadce0}
         .stats{font-size:11px;color:#5f6368;padding:3px 8px;background:#f1f3f4;border-radius:4px}
         #map{height:calc(100vh - 52px);width:100%}
         .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.85);display:flex;justify-content:center;align-items:center;z-index:3000}
@@ -31,8 +32,11 @@
         .layer-control button{padding:3px 10px;border:1px solid #ddd;border-radius:4px;background:#fff;cursor:pointer;font-size:10px;transition:all .2s}
         .layer-control button:hover{background:#f0f0f0}
         .layer-control button.active{background:#1a73e8;color:#fff;border-color:#1a73e8}
-        .filters{position:fixed;top:70px;right:16px;background:#fff;padding:14px 18px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);z-index:1000;min-width:170px;font-size:12px}
-        .filters h4{font-size:13px;color:#202124;margin-bottom:10px;border-bottom:1px solid #e8eaed;padding-bottom:6px}
+        
+        /* Фильтры */
+        .filters{position:fixed;top:70px;right:16px;background:#fff;padding:14px 18px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);z-index:1000;min-width:170px;font-size:12px;transition:all .3s ease}
+        .filters.hidden{transform:translateX(calc(100% + 20px));opacity:0;pointer-events:none}
+        .filters h4{font-size:13px;color:#202124;margin-bottom:10px;border-bottom:1px solid #e8eaed;padding-bottom:6px;display:flex;justify-content:space-between;align-items:center}
         .filters .filter-group{margin-bottom:8px}
         .filters .filter-group label{display:block;margin-bottom:4px;color:#5f6368;font-weight:500;font-size:11px}
         .filters .checkbox-group{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer}
@@ -40,6 +44,20 @@
         .filters .checkbox-group label{cursor:pointer;color:#333;font-size:12px}
         .filters .filter-stats{font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #e8eaed;text-align:center}
         .filters .filter-stats span{font-weight:600;color:#1a73e8}
+        
+        /* Кнопка показа/скрытия фильтра */
+        .toggle-filters{position:fixed;top:70px;right:16px;z-index:1001;background:#fff;border:none;border-radius:50%;width:36px;height:36px;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;font-size:16px;transition:all .3s ease;display:flex;align-items:center;justify-content:center}
+        .toggle-filters:hover{background:#f0f0f0;transform:scale(1.05)}
+        .toggle-filters.shifted{right:200px}
+        
+        /* Toast-уведомление */
+        .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;z-index:5000;opacity:0;transition:opacity .3s ease;pointer-events:none;white-space:nowrap}
+        .toast.show{opacity:1}
+        .toast.success{background:rgba(52,168,83,.95)}
+        .toast.error{background:rgba(234,67,53,.95)}
+        .toast.info{background:rgba(26,115,232,.95)}
+        
+        /* Маркеры */
         .custom-marker{display:flex;align-items:center;gap:6px;cursor:pointer;transition:transform .15s;position:relative}
         .custom-marker:hover{transform:scale(1.08)}
         .marker-dot{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35);flex-shrink:0;transition:all .2s}
@@ -50,6 +68,8 @@
         .marker-dot.stage-new,.marker-label.stage-new{background:#96CEB4}
         .marker-dot.stage-long,.marker-label.stage-long{background:#FFEAA7;color:#333}
         .marker-dot.stage-default,.marker-label.stage-default{background:#A8A8A8}
+        
+        /* Тултип */
         .marker-tooltip-list{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.92);color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;min-width:160px;max-width:320px;pointer-events:none;margin-bottom:8px;z-index:1000;box-shadow:0 4px 16px rgba(0,0,0,.3)}
         .marker-tooltip-list::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(0,0,0,.92)}
         .marker-tooltip-list .tt-title{font-weight:600;font-size:12px;margin-bottom:4px;color:#8ab4f8}
@@ -57,21 +77,27 @@
         .marker-tooltip-list .tt-item:last-child{border-bottom:none}
         .marker-tooltip-list .tt-item .tt-address{color:#aaa;font-size:10px}
         .custom-marker:hover .marker-tooltip-list{display:block}
+        
         .cluster-marker{color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.3);border:2px solid #fff;cursor:pointer;transition:all .2s;position:relative}
         .cluster-marker:hover{transform:scale(1.1)}
         .cluster-marker.small{width:32px;height:32px;font-size:12px;background:#1a73e8}
         .cluster-marker.medium{width:42px;height:42px;font-size:15px;background:#1557b0}
         .cluster-marker.large{width:52px;height:52px;font-size:18px;background:#0d47a1}
+        
         .cluster-popup .leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.2);max-height:350px}
         .cluster-popup .leaflet-popup-content{font-size:13px;max-height:320px;overflow-y:auto;min-width:220px;padding-right:4px}
         .cluster-popup .leaflet-popup-content .popup-item{padding:6px 8px;border-bottom:1px solid #e8eaed;cursor:pointer;border-radius:4px;transition:background .15s}
         .cluster-popup .leaflet-popup-content .popup-item:last-child{border-bottom:none}
         .cluster-popup .leaflet-popup-content .popup-item:hover{background:#f1f3f4}
         .cluster-popup .leaflet-popup-content .popup-title{font-weight:600;color:#1a73e8;font-size:13px}
-        .cluster-popup .leaflet-popup-content .popup-address{color:#5f6368;font-size:11px;margin-top:2px}
+        .cluster-popup .leaflet-popup-content .popup-address{color:#5f6368;font-size:11px;margin-top:2px;cursor:pointer}
+        .cluster-popup .leaflet-popup-content .popup-address:hover{color:#1a73e8;text-decoration:underline}
         .cluster-popup .leaflet-popup-content .popup-stage{font-size:10px;color:#999;display:inline-block;padding:1px 8px;border-radius:10px;margin-top:2px}
         .cluster-popup .leaflet-popup-content .popup-click-hint{color:#999;font-size:11px;font-style:italic;margin-top:8px;padding-top:8px;border-top:1px solid #e8eaed;text-align:center}
-        @media(max-width:768px){.header{flex-direction:column;align-items:stretch;gap:4px}.controls{justify-content:stretch}.controls input{min-width:unset;width:100%}.layer-control{bottom:8px;right:8px;left:8px;justify-content:center}.filters{top:100px;right:8px;left:8px;min-width:unset;padding:10px 14px}.marker-label{font-size:10px;padding:2px 8px}.marker-dot{width:14px;height:14px}.marker-dot.large{width:18px;height:18px}.cluster-marker.small{width:28px;height:28px;font-size:11px}.cluster-marker.medium{width:36px;height:36px;font-size:13px}.cluster-marker.large{width:44px;height:44px;font-size:15px}}
+        .cluster-popup .leaflet-popup-content .copy-btn{background:none;border:none;color:#1a73e8;cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px}
+        .cluster-popup .leaflet-popup-content .copy-btn:hover{background:#e8f0fe}
+        
+        @media(max-width:768px){.header{flex-direction:column;align-items:stretch;gap:4px}.controls{justify-content:stretch}.controls input{min-width:unset;width:100%}.layer-control{bottom:8px;right:8px;left:8px;justify-content:center}.filters{top:100px;right:8px;left:8px;min-width:unset;padding:10px 14px}.filters.hidden{transform:translateY(calc(-100% - 20px))}.toggle-filters{top:100px;right:8px}.toggle-filters.shifted{right:60px}.marker-label{font-size:10px;padding:2px 8px}.marker-dot{width:14px;height:14px}.marker-dot.large{width:18px;height:18px}.cluster-marker.small{width:28px;height:28px;font-size:11px}.cluster-marker.medium{width:36px;height:36px;font-size:13px}.cluster-marker.large{width:44px;height:44px;font-size:15px}.toast{font-size:12px;padding:8px 16px;bottom:70px}}
     </style>
 </head>
 <body>
@@ -91,8 +117,17 @@
 
 <div id="map"></div>
 
-<div class="filters">
-    <h4>🔍 Фильтры</h4>
+<!-- Кнопка показа/скрытия фильтра -->
+<button class="toggle-filters" id="toggleFilters" onclick="toggleFilters()" title="Показать/скрыть фильтры">
+    ⚙️
+</button>
+
+<!-- Фильтры -->
+<div class="filters" id="filters">
+    <h4>
+        🔍 Фильтры
+        <button class="btn btn-gray" onclick="toggleFilters()" style="padding:2px 8px;font-size:11px;">✕</button>
+    </h4>
     <div class="filter-group">
         <label>📌 Тип размещения</label>
         <div class="checkbox-group"><input type="checkbox" id="stageCheck" checked onchange="applyFilters()" /><label for="stageCheck">✅ Посуточная</label></div>
@@ -109,23 +144,99 @@
     <button data-layer="hybrid">Гибрид</button>
 </div>
 
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
 // ============================================================
 // КОНФИГУРАЦИЯ
 // ============================================================
-// Посуточные: UC_WXDLF4, NEW
-// Длительные: UC_LJBX0Q
 var STAGES_DAILY = ['UC_WXDLF4', 'NEW'];
 var STAGES_LONG = ['UC_LJBX0Q'];
 
 var map, clusterGroup, allData = [], filteredData = [], tileLayers = {}, currentLayer;
+var filtersVisible = true;
 
 function getStageShort(id) {
     if (!id) return 'default';
     var parts = id.split(':');
     return parts[parts.length - 1] || 'default';
+}
+
+// ============================================================
+// TOAST-УВЕДОМЛЕНИЕ
+// ============================================================
+function showToast(message, type) {
+    type = type || 'info';
+    var toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = 'toast ' + type;
+    // Принудительный reflow для перезапуска анимации
+    void toast.offsetWidth;
+    toast.classList.add('show');
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(function() {
+        toast.classList.remove('show');
+    }, 2500);
+}
+
+// ============================================================
+// КОПИРОВАНИЕ АДРЕСА
+// ============================================================
+function copyAddress(text) {
+    if (!text) {
+        showToast('❌ Адрес не найден', 'error');
+        return;
+    }
+    
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+            showToast('✅ Адрес скопирован!', 'success');
+        }).catch(function() {
+            // fallback
+            fallbackCopy(text);
+        });
+    } else {
+        fallbackCopy(text);
+    }
+}
+
+function fallbackCopy(text) {
+    var textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+        document.execCommand('copy');
+        showToast('✅ Адрес скопирован!', 'success');
+    } catch (e) {
+        showToast('❌ Не удалось скопировать', 'error');
+    }
+    document.body.removeChild(textarea);
+}
+
+// ============================================================
+// ФИЛЬТРЫ (показать/скрыть)
+// ============================================================
+function toggleFilters() {
+    filtersVisible = !filtersVisible;
+    var filters = document.getElementById('filters');
+    var btn = document.getElementById('toggleFilters');
+    
+    if (filtersVisible) {
+        filters.classList.remove('hidden');
+        btn.classList.remove('shifted');
+        btn.textContent = '⚙️';
+    } else {
+        filters.classList.add('hidden');
+        btn.classList.add('shifted');
+        btn.textContent = '⚙️';
+    }
 }
 
 // ============================================================
@@ -149,6 +260,7 @@ function loadData() {
             document.getElementById('loading').classList.add('hidden');
             document.getElementById('stats').textContent = 'ошибка';
             console.error(e);
+            showToast('❌ Ошибка загрузки данных', 'error');
         });
 }
 
@@ -192,7 +304,11 @@ function createMarker(item, idx) {
     var html = '<div class="custom-marker" data-index="'+idx+'">' +
         '<div class="marker-dot large '+cls+'"></div>' +
         '<span class="marker-label '+cls+'">'+displayTitle+'</span>' +
-        '<div class="marker-tooltip-list"><div class="tt-title">'+title+'</div><div class="tt-item"><span class="tt-address">'+addr+'</span></div></div>' +
+        '<div class="marker-tooltip-list">' +
+            '<div class="tt-title">'+title+'</div>' +
+            '<div class="tt-item"><span class="tt-address">'+addr+'</span></div>' +
+            '<div style="margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.2);font-size:10px;color:#8ab4f8;cursor:pointer;" onclick="event.stopPropagation();copyAddress(\''+addr.replace(/'/g, "\\'")+'\')">📋 Скопировать адрес</div>' +
+        '</div>' +
         '</div>';
 
     var icon = L.divIcon({ html: html, className: '', iconSize: [0,0], iconAnchor: [0,-10] });
@@ -200,7 +316,12 @@ function createMarker(item, idx) {
     marker._index = idx;
     marker.on('click', function(e) {
         var it = filteredData[e.target._index];
-        if (it) map.setView([it.lat, it.lon], 17, { animate: true, duration: 0.5 });
+        if (it) {
+            map.setView([it.lat, it.lon], 17, { animate: true, duration: 0.5 });
+            // При клике на маркер копируем адрес
+            var addr = it.address_clean || it.address || '';
+            if (addr) copyAddress(addr);
+        }
     });
     return marker;
 }
@@ -228,13 +349,14 @@ function createClusterPopup(cluster) {
         var isLong = STAGES_LONG.indexOf(stage) !== -1;
         var label = isDaily ? 'Посуточная' : isLong ? 'Длительная' : stage || 'без стадии';
         var color = isDaily ? '#FF6B6B' : isLong ? '#FFEAA7' : '#A8A8A8';
+        var addr = it.address_clean || it.address || '';
         html += '<div class="popup-item" onclick="zoomToObject('+it.lat+','+it.lon+')">' +
             '<div class="popup-title">'+(it.title||'Без названия')+'</div>' +
-            '<div class="popup-address">'+(it.address_clean||it.address||'')+'</div>' +
+            '<div class="popup-address" onclick="event.stopPropagation();copyAddress(\''+addr.replace(/'/g, "\\'")+'\')">📍 '+addr+' <span style="font-size:10px;color:#1a73e8;">📋</span></div>' +
             '<div class="popup-stage" style="background:'+color+'20;color:'+color+';">'+label+'</div>' +
             '</div>';
     }
-    html += '<div class="popup-click-hint">👆 Кликните для приближения</div></div>';
+    html += '<div class="popup-click-hint">👆 Кликните для приближения | 📋 Кликните по адресу для копирования</div></div>';
     return html;
 }
 
@@ -284,17 +406,18 @@ function searchAddress() {
         var it = filteredData[i];
         if (it.title && it.title.toLowerCase().indexOf(q) !== -1) found.push(it);
     }
-    if (found.length === 0) { alert('Ничего не найдено'); clearSearch(); return; }
+    if (found.length === 0) { showToast('🔍 Ничего не найдено', 'info'); clearSearch(); return; }
     if (found.length === 1) { map.setView([found[0].lat, found[0].lon], 17, { animate: true, duration: 0.5 }); return; }
     var html = '<div style="max-height:250px;overflow-y:auto;min-width:200px;"><div style="font-weight:600;margin-bottom:8px;">Найдено: '+found.length+'</div>';
     for (var i = 0; i < found.length; i++) {
         var it = found[i];
+        var addr = it.address_clean || it.address || '';
         html += '<div class="popup-item" onclick="zoomToObject('+it.lat+','+it.lon+')">' +
             '<div class="popup-title">'+(it.title||'Без названия')+'</div>' +
-            '<div class="popup-address">'+(it.address_clean||it.address||'')+'</div>' +
+            '<div class="popup-address" onclick="event.stopPropagation();copyAddress(\''+addr.replace(/'/g, "\\'")+'\')">📍 '+addr+' <span style="font-size:10px;color:#1a73e8;">📋</span></div>' +
             '</div>';
     }
-    html += '<div class="popup-click-hint">👆 Кликните для приближения</div></div>';
+    html += '<div class="popup-click-hint">👆 Кликните для приближения | 📋 Кликните по адресу для копирования</div></div>';
     L.popup({ className: 'cluster-popup', maxWidth: 320, minWidth: 200 })
         .setLatLng([found[0].lat, found[0].lon])
         .setContent(html)
