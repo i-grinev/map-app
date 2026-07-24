@@ -832,4 +832,95 @@
                 '<div class="popup-address">' + (item.address_clean || item.address || '') + '</div>' +
                 '</div>';
         }
-        html += '<div class="popup-click-hint">👆 Кли
+        html += '<div class="popup-click-hint">👆 Кликните для приближения</div>';
+        html += '</div>';
+        
+        var popup = L.popup({
+            className: 'cluster-popup',
+            maxWidth: 320,
+            minWidth: 200
+        })
+        .setLatLng([foundItems[0].lat, foundItems[0].lon])
+        .setContent(html)
+        .openOn(map);
+    }
+    
+    function clearSearch() {
+        document.getElementById('searchInput').value = '';
+        map.closePopup();
+        if (filteredData.length > 0) {
+            var bounds = clusterGroup.getBounds();
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+    }
+    
+    // ============================================================
+    // ПЕРЕКЛЮЧЕНИЕ СЛОЁВ
+    // ============================================================
+    function setupTileLayers() {
+        tileLayers.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap',
+            maxZoom: 19
+        });
+        
+        tileLayers.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; ESRI',
+            maxZoom: 19
+        });
+        
+        tileLayers.hybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+            attribution: '&copy; Google',
+            maxZoom: 19,
+            subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+        });
+        
+        currentLayer = tileLayers.osm;
+        currentLayer.addTo(map);
+    }
+    
+    function switchLayer(layerName) {
+        if (!tileLayers[layerName]) return;
+        if (currentLayer) map.removeLayer(currentLayer);
+        currentLayer = tileLayers[layerName];
+        currentLayer.addTo(map);
+        
+        document.querySelectorAll('#layerControl button').forEach(function(btn) {
+            btn.classList.toggle('active', btn.dataset.layer === layerName);
+        });
+    }
+    
+    // ============================================================
+    // СОБЫТИЯ
+    // ============================================================
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') searchAddress();
+    });
+    
+    document.querySelectorAll('#layerControl button').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            switchLayer(this.dataset.layer);
+        });
+    });
+    
+    setInterval(loadData, 5 * 60 * 1000);
+    
+    // ============================================================
+    // ЗАПУСК
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', function() {
+        map = L.map('map', {
+            center: [55.76, 37.64],
+            zoom: 11,
+            zoomControl: false
+        });
+        
+        L.control.zoom({ position: 'topleft' }).addTo(map);
+        
+        setupTileLayers();
+        loadData();
+    });
+    </script>
+</body>
+</html>
