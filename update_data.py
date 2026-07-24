@@ -19,10 +19,58 @@ YANDEX_API_KEY = os.environ.get('YANDEX_API_KEY', '')
 MAX_WORKERS = 10
 BATCH_SIZE = 50
 CACHE_FILE = 'data/geocode_cache.json'
-CACHE_TTL = 604800  # 7 дней (в секундах)
 
 if not BITRIX_WEBHOOK:
     raise Exception("❌ BITRIX_WEBHOOK не задан в переменных окружения!")
+
+# ============================================================
+# ПРИНУДИТЕЛЬНЫЕ КООРДИНАТЫ ДЛЯ ИЗВЕСТНЫХ АДРЕСОВ
+# ============================================================
+FORCED_COORDINATES = {
+    # Краснодар
+    'Краснодар ГД2к1': {'lat': 45.03547, 'lon': 38.975313},
+    'Краснодар ИБ88к3Кв38': {'lat': 45.03547, 'lon': 38.975313},
+    'Краснодар ИБ88к3Кв39': {'lat': 45.03547, 'lon': 38.975313},
+    'г Краснодар, ул. им. Героя Дангирева, д. 2, корп. 1': {'lat': 45.03547, 'lon': 38.975313},
+    'г Краснодар, ул. им. Ивана Беленко, д. 88, корп. 3, кв. 38': {'lat': 45.03547, 'lon': 38.975313},
+    'г Краснодар, ул. им. Ивана Беленко, д. 88, корп. 3, кв. 39': {'lat': 45.03547, 'lon': 38.975313},
+    
+    # ЛП33-2 (Ленинградский проспект 33А)
+    'г Москва, проспект Ленинградский, д. 33А, ком. 2': {'lat': 55.788454, 'lon': 37.557583},
+    'г Москва, пр-т Ленинградский, д. 33А, ком. 2, этаж 2': {'lat': 55.788454, 'lon': 37.557583},
+    'г Москва, проспект Ленинградский, д. 33А, ком. 2, этаж 2': {'lat': 55.788454, 'lon': 37.557583},
+    
+    # Ялта
+    'Ялта, улица Войкова, 39Ак2ЖК "Дарсан"Номер 707': {'lat': 44.497415, 'lon': 34.169506},
+    'Ялта, улица Войкова, 39Ак2ЖК "Дарсан"Номер 607': {'lat': 44.497415, 'lon': 34.169506},
+    'Ялта, улица Войкова, 39Ак1ЖК "Дарсан"Номер 405': {'lat': 44.497415, 'lon': 34.169506},
+    'Ялта, улица Войкова, 39Ак1ЖК "Дарсан"Номер 514': {'lat': 44.497415, 'lon': 34.169506},
+    'Ялта, улица Войкова, 39Акорпус 2 Номер 619': {'lat': 44.500391, 'lon': 34.158214},
+    'Ялта, улица Войкова, 39Акорпус 2 Номер 609': {'lat': 44.500391, 'lon': 34.158214},
+    'Ялта, улица Войкова, 39А, корпус 2 Номер 319': {'lat': 44.500391, 'lon': 34.158214},
+    'Ялта, улица Войкова, 39Акорпус 1 Номер 402': {'lat': 44.4998, 'lon': 34.158439},
+    'Ялта, улица Войкова, 39Акорпус 1 Номер 209': {'lat': 44.4998, 'lon': 34.158439},
+}
+
+def get_forced_coordinates(address, address_clean):
+    """
+    Проверяет, есть ли принудительные координаты для адреса
+    Сначала проверяет по чистому адресу, потом по оригинальному
+    """
+    # Проверяем по чистому адресу
+    if address_clean in FORCED_COORDINATES:
+        return FORCED_COORDINATES[address_clean]
+    
+    # Проверяем по оригинальному адресу
+    if address in FORCED_COORDINATES:
+        return FORCED_COORDINATES[address]
+    
+    # Проверяем частичное совпадение
+    for key, coords in FORCED_COORDINATES.items():
+        if key in address_clean or key in address:
+            return coords
+    
+    return None
 
 # ============================================================
 # КЭШ
@@ -45,37 +93,12 @@ def save_cache(cache):
     except Exception as e:
         print(f"   ⚠️ Ошибка сохранения кэша: {e}")
 
-def is_cache_valid(cached_entry, current_address):
-    """
-    Проверяет, актуален ли кэш для данного адреса
-    - Совпадает ли адрес
-    - Не устарел ли по времени
-    """
-    if not cached_entry:
-        return False
-    
-    # Проверяем, совпадает ли адрес
-    if cached_entry.get('address') != current_address:
-        return False
-    
-    # Проверяем, не устарел ли кэш
-    timestamp = cached_entry.get('timestamp', 0)
-    if time.time() - timestamp > CACHE_TTL:
-        return False
-    
-    # Проверяем, есть ли координаты
-    coords = cached_entry.get('coords')
-    if not coords:
-        return False
-    
-    return True
-
 # ============================================================
-# НОРМАЛИЗАЦИЯ АДРЕСА (УЛУЧШЕННАЯ)
+# НОРМАЛИЗАЦИЯ АДРЕСА
 # ============================================================
 def normalize_address(address):
     """
-    Улучшенная нормализация адреса с правильным определением города
+    Минимальная очистка адреса
     """
     if not address:
         return ''
@@ -93,10 +116,7 @@ def normalize_address(address):
     # 3. Убираем "Адрес:" в начале
     text = re.sub(r'^Адрес\s*:?\s*', '', text, flags=re.IGNORECASE)
     
-    # 4. Убираем "г." в начале (НО сохраняем город!)
-    text = re.sub(r'^\s*г\.\s*', '', text, flags=re.IGNORECASE)
-    
-    # 5. Заменяем сокращения
+    # 4. Заменяем сокращения
     replacements = {
         r'\bул\.\b': 'улица',
         r'\bпр-д\b': 'проезд',
@@ -113,22 +133,15 @@ def normalize_address(address):
         r'\bк\.\b': 'корпус',
         r'\bстр\.\b': 'строение',
         r'\bкорп\.\b': 'корпус',
-        r'\bс\.\b': 'село',
-        r'\bдер\.\b': 'деревня',
-        r'\bпгт\.\b': 'поселок городского типа',
     }
     
     for pattern, replacement in replacements.items():
         text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
     
-    # 6. Формат "23к7" -> "23 корпус 7"
+    # 5. Формат "23к7" -> "23 корпус 7"
     text = re.sub(r'(\d+)к(\d+)', r'\1 корпус \2', text, flags=re.IGNORECASE)
-    text = re.sub(r'(\d+)к([А-Я])', r'\1 корпус \2', text, flags=re.IGNORECASE)
     
-    # 7. Формат "дом 23к7" -> "дом 23 корпус 7"
-    text = re.sub(r'дом\s*(\d+)к(\d+)', r'дом \1 корпус \2', text, flags=re.IGNORECASE)
-    
-    # 8. Убираем пояснения в конце
+    # 6. Убираем пояснения в конце
     text = re.sub(r',?\s*код\s*домофона[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*домофон[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*ключ[\s\S]*$', '', text, flags=re.IGNORECASE)
@@ -136,9 +149,8 @@ def normalize_address(address):
     text = re.sub(r',?\s*Wi-Fi[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*Важно[\s\S]*$', '', text, flags=re.IGNORECASE)
     text = re.sub(r',?\s*обязательно[\s\S]*$', '', text, flags=re.IGNORECASE)
-    text = re.sub(r',?\s*геолокация[\s\S]*$', '', text, flags=re.IGNORECASE)
     
-    # 9. Чистим лишние пробелы и запятые
+    # 7. Чистим пробелы
     text = re.sub(r',+', ',', text)
     text = re.sub(r'\s+', ' ', text)
     text = text.strip().rstrip(',').rstrip('.')
@@ -146,91 +158,20 @@ def normalize_address(address):
     if len(text) < 5:
         return text
     
-    # ============================================================
-    # УЛУЧШЕННОЕ ОПРЕДЕЛЕНИЕ ГОРОДА
-    # ============================================================
+    # 8. Добавляем город, если нет
+    cities = ['Москва', 'Санкт-Петербург', 'Краснодар', 'Сочи', 'Ялта', 
+              'Казань', 'Екатеринбург', 'Новосибирск', 'Красногорск', 
+              'Мытищи', 'Видное', 'Люберцы', 'Химки', 'Долгопрудный']
     
-    # Проверяем наличие города в адресе
-    city_found = False
-    detected_city = None
+    has_city = any(city in text for city in cities)
     
-    # Список городов с паттернами
-    cities = {
-        'Москва': r'(Москва|г\.?\s*Москва|город\s*Москва)',
-        'Санкт-Петербург': r'(Санкт-Петербург|СПб|г\.?\s*Санкт-Петербург|город\s*Санкт-Петербург)',
-        'Краснодар': r'(Краснодар|г\.?\s*Краснодар|город\s*Краснодар)',
-        'Сочи': r'(Сочи|г\.?\s*Сочи|город\s*Сочи)',
-        'Ялта': r'(Ялта|г\.?\s*Ялта|город\s*Ялта)',
-        'Казань': r'(Казань|г\.?\s*Казань|город\s*Казань)',
-        'Екатеринбург': r'(Екатеринбург|г\.?\s*Екатеринбург|город\s*Екатеринбург)',
-        'Новосибирск': r'(Новосибирск|г\.?\s*Новосибирск|город\s*Новосибирск)',
-        'Красногорск': r'(Красногорск|г\.?\s*Красногорск|город\s*Красногорск)',
-        'Мытищи': r'(Мытищи|г\.?\s*Мытищи|город\s*Мытищи)',
-        'Видное': r'(Видное|г\.?\s*Видное|город\s*Видное)',
-        'Люберцы': r'(Люберцы|г\.?\s*Люберцы|город\s*Люберцы)',
-        'Долгопрудный': r'(Долгопрудный|г\.?\s*Долгопрудный|город\s*Долгопрудный)',
-        'Химки': r'(Химки|г\.?\s*Химки|город\s*Химки)',
-        'Котельники': r'(Котельники|г\.?\s*Котельники|город\s*Котельники)',
-        'Ступино': r'(Ступино|г\.?\s*Ступино|город\s*Ступино)',
-        'Дубна': r'(Дубна|г\.?\s*Дубна|город\s*Дубна)',
-        'Королев': r'(Королев|г\.?\s*Королев|город\s*Королев)',
-        'Балашиха': r'(Балашиха|г\.?\s*Балашиха|город\s*Балашиха)',
-        'Подольск': r'(Подольск|г\.?\s*Подольск|город\s*Подольск)',
-        'Одинцово': r'(Одинцово|г\.?\s*Одинцово|город\s*Одинцово)',
-        'Реутов': r'(Реутов|г\.?\s*Реутов|город\s*Реутов)',
-    }
-    
-    # Ищем город
-    for city, pattern in cities.items():
-        if re.search(pattern, text, re.IGNORECASE):
-            city_found = True
-            detected_city = city
-            break
-    
-    # Специальная обработка для сокращенных адресов Краснодара
-    if not city_found:
-        # "Краснодар ГД2к1" -> "г Краснодар, ул. им. Героя Дангирева, д. 2, корп. 1"
-        if re.search(r'Краснодар\s+ГД(\d+)к(\d+)', text, re.IGNORECASE):
-            text = re.sub(r'Краснодар\s+ГД(\d+)к(\d+)', r'г Краснодар, ул. им. Героя Дангирева, д. \1, корп. \2', text)
-            city_found = True
-            detected_city = 'Краснодар'
+    if not has_city:
+        # Проверяем наличие региона
+        regions = ['область', 'край', 'республика', 'район', 'поселок', 'деревня', 'село']
+        has_region = any(region in text.lower() for region in regions)
         
-        # "Краснодар ИБ88к3Кв39" -> "г Краснодар, ул. им. Ивана Беленко, д. 88, корп. 3, кв. 39"
-        elif re.search(r'Краснодар\s+ИБ(\d+)к(\d+)Кв(\d+)', text, re.IGNORECASE):
-            text = re.sub(r'Краснодар\s+ИБ(\d+)к(\d+)Кв(\d+)', r'г Краснодар, ул. им. Ивана Беленко, д. \1, корп. \2, кв. \3', text)
-            city_found = True
-            detected_city = 'Краснодар'
-        
-        # "Краснодар ГД2к1 Кв73" -> "г Краснодар, ул. им. Героя Дангирева, д. 2, корп. 1, кв. 73"
-        elif re.search(r'Краснодар\s+ГД(\d+)к(\d+)\s+Кв(\d+)', text, re.IGNORECASE):
-            text = re.sub(r'Краснодар\s+ГД(\d+)к(\d+)\s+Кв(\d+)', r'г Краснодар, ул. им. Героя Дангирева, д. \1, корп. \2, кв. \3', text)
-            city_found = True
-            detected_city = 'Краснодар'
-    
-    # Если город не найден - добавляем Москву (только если нет других признаков)
-    if not city_found:
-        # Проверяем, есть ли признаки региона (не Москва)
-        region_patterns = [
-            r'область', r'край', r'республика', 
-            r'поселок', r'деревня', r'село',
-            r'пос\.', r'дер\.', r'с\.',
-            r'Тахтамукайский', r'Дагестан', r'Краснодарский'
-        ]
-        is_region = any(re.search(pattern, text, re.IGNORECASE) for pattern in region_patterns)
-        
-        # Также проверяем города в тексте
-        city_patterns = [
-            r'Краснодар', r'Сочи', r'Ялта', r'Казань',
-            r'Санкт-Петербург', r'СПб', r'Екатеринбург'
-        ]
-        has_city_in_text = any(re.search(pattern, text, re.IGNORECASE) for pattern in city_patterns)
-        
-        if not is_region and not has_city_in_text:
+        if not has_region:
             text = 'г Москва, ' + text
-    
-    # Если город найден, но нет "г" в начале - добавляем
-    elif detected_city and not re.search(r'г\.?\s*' + detected_city, text, re.IGNORECASE):
-        text = re.sub(detected_city, f'г {detected_city}', text, flags=re.IGNORECASE)
     
     return text
 
@@ -260,37 +201,13 @@ def geocode_yandex(address):
                 pos = members[0]['GeoObject']['Point']['pos']
                 lon, lat = pos.split(' ')
                 lat, lon = float(lat), float(lon)
-                
-                # Проверяем регион для Краснодара
-                try:
-                    address_parts = members[0]['GeoObject']['metaDataProperty']['GeocoderMetaData']['Address']['Components']
-                    region = None
-                    for part in address_parts:
-                        if part['kind'] == 'region':
-                            region = part['name']
-                            break
-                    
-                    # Если в адресе Краснодар, а координаты не в Краснодарском крае - ошибка
-                    if 'Краснодар' in address and region and 'Краснодарский' not in region:
-                        print(f"   ⚠️ Ошибка: адрес из Краснодара, а координаты в {region} (lat={lat}, lon={lon})")
-                        return None
-                except:
-                    pass
-                
-                # Проверяем, что координаты не в центре Москвы (костыль)
-                if abs(lat - 55.7558) < 0.01 and abs(lon - 37.6173) < 0.01:
-                    # Если адрес не Москва, а координаты в центре Москвы - ошибка
-                    if 'Москва' not in address:
-                        print(f"   ⚠️ Ошибка: адрес не из Москвы, а координаты в центре Москвы")
-                        return None
-                
                 return {'lat': lat, 'lon': lon}
         return None
-    except Exception as e:
+    except:
         return None
 
 def geocode_osm(address):
-    """Геокодирование через OpenStreetMap (бесплатно, но медленнее)"""
+    """Геокодирование через OpenStreetMap"""
     try:
         url = "https://nominatim.openstreetmap.org/search"
         params = {
@@ -309,21 +226,17 @@ def geocode_osm(address):
         if response.status_code == 200 and response.json():
             data = response.json()[0]
             lat, lon = float(data['lat']), float(data['lon'])
-            
-            # Проверяем, что координаты не в центре Москвы (костыль)
-            if abs(lat - 55.7558) < 0.01 and abs(lon - 37.6173) < 0.01:
-                if 'Москва' not in address:
-                    return None
-            
             return {'lat': lat, 'lon': lon}
         return None
-    except Exception as e:
+    except:
         return None
 
 def geocode_address_with_cache(item, cache):
     """
-    Геокодирует адрес с использованием кэша по ID записи
-    Возвращает: (координаты, очищенный_адрес)
+    Геокодирует адрес с использованием кэша
+    Сначала проверяет принудительные координаты
+    Потом кэш
+    Потом API
     """
     item_id = str(item.get('id'))
     address = item.get(ADDRESS_FIELD, '')
@@ -336,28 +249,44 @@ def geocode_address_with_cache(item, cache):
     if not clean:
         return None, ''
     
-    # Ключ кэша по ID записи
-    cache_key = f"item_{item_id}"
+    # 1. ПРОВЕРЯЕМ ПРИНУДИТЕЛЬНЫЕ КООРДИНАТЫ
+    forced_coords = get_forced_coordinates(address, clean)
+    if forced_coords:
+        # Сохраняем в кэш
+        cache_key = f"item_{item_id}"
+        cache[cache_key] = {
+            'address': address,
+            'address_clean': clean,
+            'coords': forced_coords,
+            'timestamp': time.time(),
+            'forced': True  # Отметка, что это принудительные координаты
+        }
+        save_cache(cache)
+        return forced_coords, clean
     
-    # Проверяем кэш
+    # 2. ПРОВЕРЯЕМ КЭШ
+    cache_key = f"item_{item_id}"
     if cache_key in cache:
         cached = cache[cache_key]
-        if is_cache_valid(cached, address):
+        # Проверяем, совпадает ли адрес
+        if cached.get('address') == address:
             coords = cached.get('coords')
             if coords:
                 return coords, cached.get('address_clean', clean)
     
-    # Геокодируем (сначала Яндекс, потом OSM)
+    # 3. ГЕОКОДИРУЕМ (только новые адреса)
+    print(f"   🔍 Геокодируем новый адрес: {clean[:50]}...")
     coords = geocode_yandex(clean)
     if not coords:
         coords = geocode_osm(clean)
     
-    # Сохраняем в кэш (даже если координат нет - чтобы не геокодить каждый раз)
+    # Сохраняем в кэш
     cache[cache_key] = {
         'address': address,
         'address_clean': clean,
         'coords': coords,
-        'timestamp': time.time()
+        'timestamp': time.time(),
+        'forced': False
     }
     save_cache(cache)
     
@@ -367,7 +296,7 @@ def geocode_address_with_cache(item, cache):
 # ПАРАЛЛЕЛЬНАЯ ОБРАБОТКА
 # ============================================================
 def process_item(item, cache):
-    """Обрабатывает один элемент: извлекает адрес, геокодирует"""
+    """Обрабатывает один элемент"""
     item_id = item.get('id')
     address = item.get(ADDRESS_FIELD, '')
     stage_id = item.get('stageId', '')
@@ -384,7 +313,8 @@ def process_item(item, cache):
         'lon': coords['lon'] if coords else None,
         'stage_id': stage_id,
         'stage_name': item.get('stage_name', ''),
-        'cached': cache.get(f"item_{item_id}") is not None  # Отметка, взято из кэша или нет
+        'cached': cache.get(f"item_{item_id}") is not None,
+        'forced': cache.get(f"item_{item_id}", {}).get('forced', False) if cache.get(f"item_{item_id}") else False
     }, coords is not None
 
 def process_parallel(items, cache):
@@ -392,6 +322,7 @@ def process_parallel(items, cache):
     results = []
     geocoded = 0
     from_cache = 0
+    forced = 0
     total = len(items)
     start_time = time.time()
     
@@ -412,17 +343,19 @@ def process_parallel(items, cache):
                     geocoded += 1
                 if result.get('cached'):
                     from_cache += 1
+                if result.get('forced'):
+                    forced += 1
                 
                 completed += 1
                 if completed % BATCH_SIZE == 0 or completed == total:
                     elapsed = time.time() - start_time
-                    print(f"   Обработано: {completed}/{total} | Найдено: {geocoded} | Из кэша: {from_cache} | Время: {elapsed:.0f}с")
+                    print(f"   Обработано: {completed}/{total} | Найдено: {geocoded} | Из кэша: {from_cache} | Принудительно: {forced} | Время: {elapsed:.0f}с")
                     
             except Exception as e:
                 print(f"   ❌ Ошибка при обработке элемента: {e}")
                 completed += 1
     
-    return results, geocoded, from_cache
+    return results, geocoded, from_cache, forced
 
 # ============================================================
 # ЗАПРОС К БИТРИКС24
@@ -471,8 +404,8 @@ def fetch_from_bitrix():
 # ============================================================
 # СТАТИСТИКА
 # ============================================================
-def print_statistics(results, geocoded, from_cache, total):
-    """Выводит статистику по обработанным элементам"""
+def print_statistics(results, geocoded, from_cache, forced, total):
+    """Выводит статистику"""
     print("\n" + "="*60)
     print("📊 СТАТИСТИКА ОБРАБОТКИ")
     print("="*60)
@@ -480,23 +413,8 @@ def print_statistics(results, geocoded, from_cache, total):
     print(f"   С координатами:         {geocoded} ({geocoded/total*100:.1f}%)")
     print(f"   Без координат:          {total - geocoded} ({(total-geocoded)/total*100:.1f}%)")
     print(f"   Из кэша:                {from_cache} ({from_cache/total*100:.1f}%)")
+    print(f"   Принудительно:          {forced} ({forced/total*100:.1f}%)")
     print(f"   Новых запросов к API:   {total - from_cache} ({(total-from_cache)/total*100:.1f}%)")
-    
-    # Статистика по стадиям
-    stages = {}
-    for r in results:
-        stage = r.get('stage_id', 'unknown')
-        if stage not in stages:
-            stages[stage] = {'total': 0, 'geocoded': 0}
-        stages[stage]['total'] += 1
-        if r.get('lat'):
-            stages[stage]['geocoded'] += 1
-    
-    print("\n   📋 По стадиям (топ-10):")
-    for stage, data in sorted(stages.items(), key=lambda x: x[1]['total'], reverse=True)[:10]:
-        stage_short = stage.split(':')[-1] if ':' in stage else stage
-        geocoded_count = data['geocoded']
-        print(f"      {stage_short}: {geocoded_count}/{data['total']} ({geocoded_count/data['total']*100:.1f}%)")
     
     # Статистика по городам
     cities = {}
@@ -507,28 +425,29 @@ def print_statistics(results, geocoded, from_cache, total):
             city = 'Краснодар'
         elif 'Санкт-Петербург' in addr or 'СПб' in addr:
             city = 'Санкт-Петербург'
-        elif 'Москва' in addr:
-            city = 'Москва'
-        elif 'Сочи' in addr:
-            city = 'Сочи'
         elif 'Ялта' in addr:
             city = 'Ялта'
+        elif 'Сочи' in addr:
+            city = 'Сочи'
+        elif 'Москва' in addr:
+            city = 'Москва'
         else:
-            # Пытаемся определить город
             for c in ['Екатеринбург', 'Новосибирск', 'Казань', 'Красногорск', 'Мытищи', 'Видное', 'Люберцы', 'Химки']:
                 if c in addr:
                     city = c
                     break
         
         if city not in cities:
-            cities[city] = {'total': 0, 'geocoded': 0}
+            cities[city] = {'total': 0, 'geocoded': 0, 'forced': 0}
         cities[city]['total'] += 1
         if r.get('lat'):
             cities[city]['geocoded'] += 1
+        if r.get('forced'):
+            cities[city]['forced'] += 1
     
     print("\n   📍 По городам:")
     for city, data in sorted(cities.items(), key=lambda x: x[1]['total'], reverse=True):
-        print(f"      {city}: {data['geocoded']}/{data['total']} ({data['geocoded']/data['total']*100:.1f}%)")
+        print(f"      {city}: {data['geocoded']}/{data['total']} ({data['geocoded']/data['total']*100:.1f}%) [принудительно: {data['forced']}]")
 
 # ============================================================
 # ОСНОВНАЯ ФУНКЦИЯ
@@ -536,8 +455,7 @@ def print_statistics(results, geocoded, from_cache, total):
 def main():
     print(f"🔄 Обновление данных: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"   Яндекс ключ: {'✅ Есть' if YANDEX_API_KEY else '❌ Нет'}")
-    print(f"   Время жизни кэша: {CACHE_TTL // 86400} дней")
-    print(f"   ⚠️  Режим: обработка ВСЕХ элементов с проверкой актуальности")
+    print(f"   Принудительных координат: {len(FORCED_COORDINATES)}")
     
     # Загружаем кэш
     cache = load_cache()
@@ -555,7 +473,7 @@ def main():
     
     # Обрабатываем
     print(f"\n📍 Геокодирование...")
-    results, geocoded, from_cache = process_parallel(items, cache)
+    results, geocoded, from_cache, forced = process_parallel(items, cache)
     
     # Сохраняем кэш
     save_cache(cache)
@@ -570,6 +488,7 @@ def main():
                 'total': len(results),
                 'geocoded': geocoded,
                 'from_cache': from_cache,
+                'forced': forced,
                 'cache_size': len(cache),
                 'items': results
             }, f, ensure_ascii=False, indent=2)
@@ -577,7 +496,7 @@ def main():
         print(f"   ❌ Ошибка сохранения результатов: {e}")
     
     # Выводим статистику
-    print_statistics(results, geocoded, from_cache, total)
+    print_statistics(results, geocoded, from_cache, forced, total)
     
     print(f"\n✅ Готово! Файл: {output_file}")
     print("="*60)
