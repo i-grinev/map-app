@@ -146,7 +146,7 @@
 
 <div class="toast" id="toast"></div>
 
-<!-- ✅ Подключаем конфиг с ключом из секретов GitHub -->
+<!-- ✅ Подключаем config.js (генерируется автоматически) -->
 <script src="data/config.js"></script>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -158,7 +158,7 @@
 var STAGES_DAILY = ['UC_WXDLF4', 'NEW'];
 var STAGES_LONG = ['UC_LJBX0Q'];
 
-// ✅ БЕРЁМ КЛЮЧ ИЗ КОНФИГА (который сгенерирован Python-скриптом)
+// ✅ БЕРЁМ КЛЮЧ ИЗ config.js (генерируется автоматически)
 var YANDEX_API_KEY = window.YANDEX_API_KEY || '';
 
 var map, clusterGroup, allData = [], filteredData = [], tileLayers = {}, currentLayer;
@@ -222,7 +222,7 @@ function geocodeAddress() {
     }
 
     if (!YANDEX_API_KEY) {
-        showToast('⚠️ Яндекс API ключ не найден. Проверьте config.js', 'error');
+        showToast('⚠️ Яндекс API ключ не найден', 'error');
         return;
     }
 
