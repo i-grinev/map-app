@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # ============================================================
 # КОНФИГУРАЦИЯ (из секретов GitHub)
 # ============================================================
-BITRIX_WEBHOOK = os.environ.get('BITRIX_WEBHOOK')
+BITRIX_WEBHOOK = os.environ.get('BITRIX_WEBOOK')
 ENTITY_TYPE_ID = 1038
 ADDRESS_FIELD = 'ufCrm8FullAdress'
 YANDEX_API_KEY = os.environ.get('YANDEX_API_KEY', '')
