@@ -18,6 +18,7 @@
         .btn-primary{background:#1a73e8;color:#fff}.btn-primary:hover{background:#1557b0}
         .btn-warning{background:#fbbc04;color:#333}.btn-warning:hover{background:#e5ac00}
         .btn-success{background:#34a853;color:#fff}.btn-success:hover{background:#2d9248}
+        .btn-danger{background:#ea4335;color:#fff}.btn-danger:hover{background:#d33426}
         .btn-gray{background:#e8eaed;color:#333}.btn-gray:hover{background:#dadce0}
         .stats{font-size:11px;color:#5f6368;padding:3px 8px;background:#f1f3f4;border-radius:4px}
         #map{height:calc(100vh - 52px);width:100%}
@@ -33,7 +34,6 @@
         .layer-control button:hover{background:#f0f0f0}
         .layer-control button.active{background:#1a73e8;color:#fff;border-color:#1a73e8}
         
-        /* Фильтры */
         .filters{position:fixed;top:70px;right:16px;background:#fff;padding:14px 18px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.15);z-index:1000;min-width:170px;font-size:12px;transition:all .3s ease}
         .filters.hidden{transform:translateX(calc(100% + 20px));opacity:0;pointer-events:none}
         .filters h4{font-size:13px;color:#202124;margin-bottom:10px;border-bottom:1px solid #e8eaed;padding-bottom:6px;display:flex;justify-content:space-between;align-items:center}
@@ -45,19 +45,16 @@
         .filters .filter-stats{font-size:10px;color:#999;margin-top:8px;padding-top:8px;border-top:1px solid #e8eaed;text-align:center}
         .filters .filter-stats span{font-weight:600;color:#1a73e8}
         
-        /* Кнопка показа/скрытия фильтра */
         .toggle-filters{position:fixed;top:70px;right:16px;z-index:1001;background:#fff;border:none;border-radius:50%;width:36px;height:36px;box-shadow:0 2px 8px rgba(0,0,0,.15);cursor:pointer;font-size:16px;transition:all .3s ease;display:flex;align-items:center;justify-content:center}
         .toggle-filters:hover{background:#f0f0f0;transform:scale(1.05)}
         .toggle-filters.shifted{right:200px}
         
-        /* Toast-уведомление */
         .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;z-index:5000;opacity:0;transition:opacity .3s ease;pointer-events:none;white-space:nowrap}
         .toast.show{opacity:1}
         .toast.success{background:rgba(52,168,83,.95)}
         .toast.error{background:rgba(234,67,53,.95)}
         .toast.info{background:rgba(26,115,232,.95)}
         
-        /* Маркеры */
         .custom-marker{display:flex;align-items:center;gap:6px;cursor:pointer;transition:transform .15s;position:relative}
         .custom-marker:hover{transform:scale(1.08)}
         .marker-dot{width:16px;height:16px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35);flex-shrink:0;transition:all .2s}
@@ -69,7 +66,9 @@
         .marker-dot.stage-long,.marker-label.stage-long{background:#FFEAA7;color:#333}
         .marker-dot.stage-default,.marker-label.stage-default{background:#A8A8A8}
         
-        /* Тултип */
+        .marker-dot.search-marker{background:#34a853;border-color:#fff;box-shadow:0 0 0 3px #34a85355, 0 1px 6px rgba(0,0,0,.35)}
+        .marker-label.search-label{background:#34a853;color:#fff}
+        
         .marker-tooltip-list{display:none;position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.92);color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;min-width:160px;max-width:320px;pointer-events:none;margin-bottom:8px;z-index:1000;box-shadow:0 4px 16px rgba(0,0,0,.3)}
         .marker-tooltip-list::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:rgba(0,0,0,.92)}
         .marker-tooltip-list .tt-title{font-weight:600;font-size:12px;margin-bottom:4px;color:#8ab4f8}
@@ -97,6 +96,9 @@
         .cluster-popup .leaflet-popup-content .copy-btn{background:none;border:none;color:#1a73e8;cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px}
         .cluster-popup .leaflet-popup-content .copy-btn:hover{background:#e8f0fe}
         
+        .search-results-info{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.85);color:#fff;padding:8px 20px;border-radius:20px;font-size:12px;z-index:1000;pointer-events:none;transition:all .3s;opacity:0}
+        .search-results-info.show{opacity:1}
+        
         @media(max-width:768px){.header{flex-direction:column;align-items:stretch;gap:4px}.controls{justify-content:stretch}.controls input{min-width:unset;width:100%}.layer-control{bottom:8px;right:8px;left:8px;justify-content:center}.filters{top:100px;right:8px;left:8px;min-width:unset;padding:10px 14px}.filters.hidden{transform:translateY(calc(-100% - 20px))}.toggle-filters{top:100px;right:8px}.toggle-filters.shifted{right:60px}.marker-label{font-size:10px;padding:2px 8px}.marker-dot{width:14px;height:14px}.marker-dot.large{width:18px;height:18px}.cluster-marker.small{width:28px;height:28px;font-size:11px}.cluster-marker.medium{width:36px;height:36px;font-size:13px}.cluster-marker.large{width:44px;height:44px;font-size:15px}.toast{font-size:12px;padding:8px 16px;bottom:70px}}
     </style>
 </head>
@@ -107,9 +109,12 @@
 <div class="header">
     <h1>📍 <span id="pageTitle">Карта</span> <span class="badge" id="updateBadge"></span></h1>
     <div class="controls">
-        <input type="text" id="searchInput" placeholder="Поиск..." />
+        <input type="text" id="searchInput" placeholder="Поиск по названию..." />
         <button class="btn btn-primary" onclick="searchAddress()">Найти</button>
         <button class="btn btn-warning" onclick="clearSearch()">✕</button>
+        <input type="text" id="geocodeInput" placeholder="Введите адрес для поиска..." style="min-width:180px;" />
+        <button class="btn btn-success" onclick="geocodeAddress()">📍 Найти адрес</button>
+        <button class="btn btn-danger" onclick="clearGeocodeMarker()">🗑</button>
         <button class="btn btn-success" onclick="loadData()">⟳</button>
         <span class="stats" id="stats"></span>
     </div>
@@ -117,17 +122,12 @@
 
 <div id="map"></div>
 
-<!-- Кнопка показа/скрытия фильтра -->
-<button class="toggle-filters" id="toggleFilters" onclick="toggleFilters()" title="Показать/скрыть фильтры">
-    ⚙️
-</button>
+<div class="search-results-info" id="searchResultsInfo">📍 Новый объект найден</div>
 
-<!-- Фильтры -->
+<button class="toggle-filters" id="toggleFilters" onclick="toggleFilters()" title="Показать/скрыть фильтры">⚙️</button>
+
 <div class="filters" id="filters">
-    <h4>
-        🔍 Фильтры
-        <button class="btn btn-gray" onclick="toggleFilters()" style="padding:2px 8px;font-size:11px;">✕</button>
-    </h4>
+    <h4>🔍 Фильтры <button class="btn btn-gray" onclick="toggleFilters()" style="padding:2px 8px;font-size:11px;">✕</button></h4>
     <div class="filter-group">
         <label>📌 Тип размещения</label>
         <div class="checkbox-group"><input type="checkbox" id="stageCheck" checked onchange="applyFilters()" /><label for="stageCheck">✅ Посуточная</label></div>
@@ -144,8 +144,10 @@
     <button data-layer="hybrid">Гибрид</button>
 </div>
 
-<!-- Toast -->
 <div class="toast" id="toast"></div>
+
+<!-- ✅ Подключаем конфиг с ключом из секретов GitHub -->
+<script src="data/config.js"></script>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -156,8 +158,13 @@
 var STAGES_DAILY = ['UC_WXDLF4', 'NEW'];
 var STAGES_LONG = ['UC_LJBX0Q'];
 
+// ✅ БЕРЁМ КЛЮЧ ИЗ КОНФИГА (который сгенерирован Python-скриптом)
+var YANDEX_API_KEY = window.YANDEX_API_KEY || '';
+
 var map, clusterGroup, allData = [], filteredData = [], tileLayers = {}, currentLayer;
 var filtersVisible = true;
+var geocodeMarker = null;
+var geocodeCircle = null;
 
 function getStageShort(id) {
     if (!id) return 'default';
@@ -166,41 +173,29 @@ function getStageShort(id) {
 }
 
 // ============================================================
-// TOAST-УВЕДОМЛЕНИЕ
+// TOAST
 // ============================================================
 function showToast(message, type) {
     type = type || 'info';
     var toast = document.getElementById('toast');
     toast.textContent = message;
     toast.className = 'toast ' + type;
-    // Принудительный reflow для перезапуска анимации
     void toast.offsetWidth;
     toast.classList.add('show');
     clearTimeout(toast._timeout);
-    toast._timeout = setTimeout(function() {
-        toast.classList.remove('show');
-    }, 2500);
+    toast._timeout = setTimeout(function() { toast.classList.remove('show'); }, 3000);
 }
 
 // ============================================================
-// КОПИРОВАНИЕ АДРЕСА
+// КОПИРОВАНИЕ
 // ============================================================
 function copyAddress(text) {
-    if (!text) {
-        showToast('❌ Адрес не найден', 'error');
-        return;
-    }
-    
+    if (!text) { showToast('❌ Адрес не найден', 'error'); return; }
     if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(function() {
             showToast('✅ Адрес скопирован!', 'success');
-        }).catch(function() {
-            // fallback
-            fallbackCopy(text);
-        });
-    } else {
-        fallbackCopy(text);
-    }
+        }).catch(function() { fallbackCopy(text); });
+    } else { fallbackCopy(text); }
 }
 
 function fallbackCopy(text) {
@@ -211,32 +206,149 @@ function fallbackCopy(text) {
     textarea.style.left = '-9999px';
     document.body.appendChild(textarea);
     textarea.select();
-    try {
-        document.execCommand('copy');
-        showToast('✅ Адрес скопирован!', 'success');
-    } catch (e) {
-        showToast('❌ Не удалось скопировать', 'error');
-    }
+    try { document.execCommand('copy'); showToast('✅ Адрес скопирован!', 'success'); } catch (e) { showToast('❌ Не удалось скопировать', 'error'); }
     document.body.removeChild(textarea);
 }
 
 // ============================================================
-// ФИЛЬТРЫ (показать/скрыть)
+// ГЕОКОДИРОВАНИЕ (Яндекс)
 // ============================================================
-function toggleFilters() {
-    filtersVisible = !filtersVisible;
-    var filters = document.getElementById('filters');
-    var btn = document.getElementById('toggleFilters');
-    
-    if (filtersVisible) {
-        filters.classList.remove('hidden');
-        btn.classList.remove('shifted');
-        btn.textContent = '⚙️';
-    } else {
-        filters.classList.add('hidden');
-        btn.classList.add('shifted');
-        btn.textContent = '⚙️';
+function geocodeAddress() {
+    var input = document.getElementById('geocodeInput');
+    var address = input.value.trim();
+    if (!address) {
+        showToast('⚠️ Введите адрес', 'info');
+        return;
     }
+
+    if (!YANDEX_API_KEY) {
+        showToast('⚠️ Яндекс API ключ не найден. Проверьте config.js', 'error');
+        return;
+    }
+
+    showToast('🔍 Ищем адрес...', 'info');
+    var url = 'https://geocode-maps.yandex.ru/1.x/?apikey=' + encodeURIComponent(YANDEX_API_KEY) +
+              '&geocode=' + encodeURIComponent(address) +
+              '&format=json&results=1&lang=ru_RU';
+
+    fetch(url)
+        .then(function(response) {
+            if (!response.ok) throw new Error('Ошибка сети');
+            return response.json();
+        })
+        .then(function(data) {
+            var members = data?.response?.GeoObjectCollection?.featureMember || [];
+            if (!members.length) {
+                showToast('❌ Адрес не найден', 'error');
+                return;
+            }
+            var pos = members[0].GeoObject.Point.pos.split(' ');
+            var lon = parseFloat(pos[0]);
+            var lat = parseFloat(pos[1]);
+            var displayName = members[0].GeoObject.name || address;
+
+            clearGeocodeMarker();
+
+            var icon = L.divIcon({
+                html: '<div class="custom-marker">' +
+                      '<div class="marker-dot large search-marker"></div>' +
+                      '<span class="marker-label search-label">📍 Новый объект</span>' +
+                      '<div class="marker-tooltip-list">' +
+                          '<div class="tt-title">Новый объект</div>' +
+                          '<div class="tt-item"><span class="tt-address">' + displayName + '</span></div>' +
+                          '<div style="margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.2);font-size:10px;color:#8ab4f8;cursor:pointer;" onclick="event.stopPropagation();copyAddress(\'' + displayName.replace(/'/g, "\\'") + '\')">📋 Скопировать адрес</div>' +
+                      '</div>' +
+                      '</div>',
+                className: '',
+                iconSize: [0, 0],
+                iconAnchor: [0, -10]
+            });
+
+            geocodeMarker = L.marker([lat, lon], { icon: icon, interactive: true });
+            geocodeMarker.addTo(map);
+
+            geocodeCircle = L.circle([lat, lon], {
+                radius: 200,
+                color: '#34a853',
+                fillColor: '#34a853',
+                fillOpacity: 0.15,
+                weight: 2,
+                dashArray: '5, 5'
+            });
+            geocodeCircle.addTo(map);
+
+            map.setView([lat, lon], 16, { animate: true, duration: 0.6 });
+
+            var info = document.getElementById('searchResultsInfo');
+            info.textContent = '📍 Новый объект: ' + displayName;
+            info.classList.add('show');
+            setTimeout(function() { info.classList.remove('show'); }, 5000);
+
+            showToast('✅ Адрес найден!', 'success');
+            highlightNearby(lat, lon);
+        })
+        .catch(function(e) {
+            console.error(e);
+            showToast('❌ Ошибка геокодирования: ' + e.message, 'error');
+        });
+}
+
+// ============================================================
+// ПОДСВЕТКА БЛИЖАЙШИХ ОБЪЕКТОВ
+// ============================================================
+function highlightNearby(lat, lon, radius) {
+    radius = radius || 500;
+    var count = 0;
+    var nearest = [];
+
+    for (var i = 0; i < allData.length; i++) {
+        var item = allData[i];
+        if (!item.lat || !item.lon) continue;
+        var dist = haversineDistance(lat, lon, item.lat, item.lon);
+        if (dist <= radius) {
+            count++;
+            nearest.push({ item: item, dist: dist });
+        }
+    }
+
+    nearest.sort(function(a, b) { return a.dist - b.dist; });
+
+    var msg = '📍 В радиусе ' + radius + ' м найдено ' + count + ' объектов';
+    if (nearest.length > 0) {
+        msg += '. Ближайший: ' + (nearest[0].item.title || 'Без названия') + ' (' + Math.round(nearest[0].dist) + ' м)';
+    }
+    showToast(msg, 'info');
+}
+
+// ============================================================
+// РАССТОЯНИЕ
+// ============================================================
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    var R = 6371000;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLon = (lon2 - lon1) * Math.PI / 180;
+    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+// ============================================================
+// УДАЛЕНИЕ МАРКЕРА ПОИСКА
+// ============================================================
+function clearGeocodeMarker() {
+    if (geocodeMarker) {
+        map.removeLayer(geocodeMarker);
+        geocodeMarker = null;
+    }
+    if (geocodeCircle) {
+        map.removeLayer(geocodeCircle);
+        geocodeCircle = null;
+    }
+    document.getElementById('geocodeInput').value = '';
+    var info = document.getElementById('searchResultsInfo');
+    info.classList.remove('show');
 }
 
 // ============================================================
@@ -267,6 +379,21 @@ function loadData() {
 // ============================================================
 // ФИЛЬТРЫ
 // ============================================================
+function toggleFilters() {
+    filtersVisible = !filtersVisible;
+    var filters = document.getElementById('filters');
+    var btn = document.getElementById('toggleFilters');
+    if (filtersVisible) {
+        filters.classList.remove('hidden');
+        btn.classList.remove('shifted');
+        btn.textContent = '⚙️';
+    } else {
+        filters.classList.add('hidden');
+        btn.classList.add('shifted');
+        btn.textContent = '⚙️';
+    }
+}
+
 function applyFilters() {
     var showDaily = document.getElementById('stageCheck').checked;
     var showLong = document.getElementById('longTermCheck').checked;
@@ -318,7 +445,6 @@ function createMarker(item, idx) {
         var it = filteredData[e.target._index];
         if (it) {
             map.setView([it.lat, it.lon], 17, { animate: true, duration: 0.5 });
-            // При клике на маркер копируем адрес
             var addr = it.address_clean || it.address || '';
             if (addr) copyAddress(addr);
         }
@@ -396,7 +522,7 @@ function renderMarkers() {
 }
 
 // ============================================================
-// ПОИСК
+// ПОИСК ПО НАЗВАНИЮ
 // ============================================================
 function searchAddress() {
     var q = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -464,7 +590,9 @@ document.addEventListener('DOMContentLoaded', function() {
     loadData();
 });
 
+// Обработчики
 document.getElementById('searchInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') searchAddress(); });
+document.getElementById('geocodeInput').addEventListener('keypress', function(e) { if (e.key === 'Enter') geocodeAddress(); });
 document.querySelectorAll('#layerControl button').forEach(function(b) {
     b.addEventListener('click', function() { switchLayer(this.dataset.layer); });
 });
